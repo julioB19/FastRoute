@@ -7,8 +7,8 @@ app = Flask(__name__)
 # CONFIGURAÇÕES DO BANCO DE DADOS (POSTGRESQL)
 DB_USER = "postgres"
 DB_PASSWORD = "fastrout"
-DB_HOST = "localhost"
-DB_PORT = "5050"
+DB_HOST = "127.0.0.1"
+DB_PORT = "3380"
 DB_NAME = "FastRoute"
 
 DATABASE_URL = f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
@@ -16,10 +16,9 @@ DATABASE_URL = f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_POR
 # Inicialização da Engine (Global)
 try:
     engine = create_engine(DATABASE_URL)
-    print("Engine do SQLAlchemy criada com sucesso.")
 except Exception as e:
-    print(f"ERRO: Não foi possível criar a Engine: {e}")
-    # Nota: Em um ambiente real, você pode querer interromper a aplicação se a engine falhar.
+    engine = None
+    print(f"Erro ao conectar ao banco de dados: {e}")
 
 
 # Primeira tela -> Login
