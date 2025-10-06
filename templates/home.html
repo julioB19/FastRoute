@@ -1,11 +1,82 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Home</title>
+    <title>Home com Sidebar Bootstrap</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* CSS customizado para garantir que a sidebar seja 100% da altura (viewport height) */
+        .sidebar {
+            height: 100vh; /* 100% da altura da tela */
+            overflow-y: auto; /* Permite rolar se o conteúdo da sidebar for muito longo */
+        }
+
+        /* Define a largura da sidebar e cria a margem para o conteúdo principal */
+        .sidebar-container {
+            /* Fixa a barra na esquerda. Aqui usamos 250px, ajuste se necessário */
+            width: 250px; 
+            z-index: 1000;
+        }
+
+        /* A margem esquerda do conteúdo principal deve ser igual à largura da sidebar */
+        .main-content {
+            margin-left: 250px; 
+        }
+
+        /* Cor de fundo para a sidebar */
+        .bg-custom-dark {
+            background-color: #212529 !important; /* Cor dark do BS */
+        }
+    </style>
 </head>
 <body>
-    <h1>Você acessou fdp</h1>
+
+    <div class="sidebar-container **fixed-top**">
+        <nav id="sidebar" class="sidebar bg-custom-dark text-white p-3">
+            <h4 class="text-white mb-4">Dashboard</h4>
+            
+            <ul class="nav nav-pills flex-column mb-auto">
+                <li class="nav-item">
+                    <a href="#" class="nav-link active" aria-current="page">
+                        Home
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="nav-link text-white">
+                        <i class="bi bi-speedometer2"></i> Dashboard
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="nav-link text-white">
+                        <i class="bi bi-table"></i> Pedidos
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="nav-link text-white">
+                        <i class="bi bi-grid"></i> Produtos
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="nav-link text-white">
+                        <i class="bi bi-person-circle"></i> Clientes
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+
+    <main class="main-content">
+        <div class="container-fluid py-4">
+            <h1>Página Inicial</h1>
+            <p class="lead">Esta área contém o conteúdo principal do seu site.</p>
+            
+            <div style="height: 2000px; background-color: #f8f9fa; padding: 20px; border-radius: 5px;">
+                <p>Role a tela para baixo. A barra lateral (Sidebar) deve permanecer fixa no lado esquerdo.</p>
+                </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
