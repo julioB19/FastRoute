@@ -48,12 +48,15 @@ def login():
 
     except Exception as e:
         print(f"Erro Crítico de Banco de Dados: {e}")
-        return render_template('login.html', erro="Erro de comunicação com o banco de dados. Verifique a Engine e o status do PostgreSQL.")
-
+        return render_template('login.html', erro="Erro de comunicação com o banco de dados. Tente novamente mais tarde.")
 
 @app.route('/home')
 def home():
     return render_template('home.html')
+
+@app.route('/importar', methods=['GET', 'POST'])
+def importar_dados():
+    return render_template('importar.html')
 
 if __name__ == '__main__':
     app.run(debug=True)
