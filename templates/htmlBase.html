@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block titulo %}FastRoute{% endblock %}</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+    <style>
+        /* Sidebar */
+        .sidebar-container {
+            height: 100vh;
+            width: 280px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            background-color: #212529;
+            transition: width 0.3s;
+            overflow-x: hidden;
+            z-index: 1000;
+        }
+
+        .sidebar-container.collapsed {
+            width: 60px; /* Largura reduzida para mostrar apenas ícones */
+        }
+
+        /* Container do Título e Botão */
+        .sidebar-header {
+            display: flex; /* Permite colocar elementos lado a lado (ícone e título) */
+            align-items: center;
+            padding: 1rem;
+            height: 56px; /* Altura padrão para alinhar com o navbar */
+            background-color: #343a40; /* Cor de fundo diferente para destaque (opcional) */
+        }
+
+        .sidebar-container.collapsed .sidebar-header {
+            justify-content: center; /* Centraliza o conteúdo (ícone do menu) quando colapsado */
+            padding: 0; /* Remove o padding para evitar corte */
+        }
+
+        .sidebar-header h4 {
+            flex-grow: 1; /* Permite que o título use o espaço restante */
+            margin: 0;
+            white-space: nowrap; /* Impede que o texto quebre linha */
+            overflow: hidden; /* Oculta o texto que excede a largura */
+            text-overflow: ellipsis; /* Adiciona '...' se o texto for cortado (opcional) */
+            transition: opacity 0.3s, max-width 0.3s;
+        }
+
+        .sidebar-container.collapsed .sidebar-header h4 {
+            display: none; /* Remove o título quando colapsado */
+        }
+        
+        /* Ajuste no botão de recolher para ser parte do header */
+        #toggleSidebar {
+            /* Removendo o posicionamento fixed e z-index anterior */
+            position: static; 
+            top: auto; 
+            left: auto;
+            z-index: auto;
+            margin-right: 10px; /* Espaçamento entre o ícone e o título */
+        }
+
+        .sidebar-container.collapsed #toggleSidebar {
+            margin-right: 0;
+        }
+
+        /* Oculta os textos dos links (span) quando colapsado */
+        .sidebar-container.collapsed .nav-link span {
+            display: none;
+        }
+        
+        /* Garante que os ícones fiquem centralizados quando colapsado */
+        .sidebar-container.collapsed .nav-link {
+            justify-content: center; /* Centraliza o ícone horizontalmente */
+            padding-left: 0.5rem; /* Ajuste o padding para colapsado */
+            padding-right: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Conteúdo principal */
+        .main-content {
+            margin-left: 250px;
+            transition: margin-left 0.3s;
+        }
+        .main-content.collapsed {
+            margin-left: 60px;
+        }
+
+        /* Rolagem da sidebar */
+        .sidebar {
+            overflow-y: auto;
+            height: calc(100% - 56px); /* 100% menos a altura do header */
+            padding: 0 1rem 1rem 1rem; /* Ajuste do padding: topo removido */
+        }
+
+        /* Links ativos */
+        .nav-link.active {
+            background-color: #2f8b4e !important;
+            color: white !important;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="sidebarContainer" class="sidebar-container">
+        
+        <div class="sidebar-header">
+             <button id="toggleSidebar" class="btn btn-dark p-2">
+                <i class="bi bi-list"></i>
+            </button>
+            <h4 class="text-white">FastRoute
+                <img src="{{ url_for('static', filename='images/iconeFastRouteBranco.png') }}" alt="Ícone" class="ms-auto" style="width: 90px; height: 40px; justify-content: left;">
+            </h4>
+        </div>
+
+        <nav class="sidebar text-white" >
+            <ul class="nav nav-pills flex-column mb-auto">
+                <li class="nav-item">
+                    <a href="{{ url_for('home') }}" class="nav-link text-white {% if request.endpoint == 'home' %}active{% endif %}">
+                        <i class="bi bi-house"></i> <span>Home</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{{ url_for('importar_dados') }}" class="nav-link text-white {% if request.endpoint == 'importar_dados' %}active{% endif %}">
+                        <i class="bi bi-speedometer2"></i> <span>Importar Dados</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link text-white">
+                        <i class="bi bi-table"></i> <span>Pedidos</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link text-white">
+                        <i class="bi bi-grid"></i> <span>Produtos</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link text-white">
+                        <i class="bi bi-person-circle"></i> <span>Clientes</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+
+    <main id="mainContent" class="main-content">
+        <div class="container-fluid py-4">
+            {% block conteudo %}{% endblock %}
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const toggleBtn = document.getElementById('toggleSidebar');
+        const sidebar = document.getElementById('sidebarContainer');
+        const main = document.getElementById('mainContent');
+
+        toggleBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('collapsed');
+            main.classList.toggle('collapsed');
+        });
+    </script>
+
+</body>
+</html>
