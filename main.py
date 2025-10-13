@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for
 import pandas as pd
-from sqlalchemy import create_engine, text
+import psycopg2
 
 app = Flask(__name__)
 
@@ -11,15 +11,15 @@ DB_HOST = "127.0.0.1"
 DB_PORT = "3380"
 DB_NAME = "FastRoute"
 
-DATABASE_URL = f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-
-# Inicialização da Engine (Global)
-try:
-    engine = create_engine(DATABASE_URL)
-except Exception as e:
-    engine = None
-    print(f"Erro ao conectar ao banco de dados: {e}")
-
+# === CONFIGURAÇÕES DE CONEXÃO AO BANCO ===
+conn = psycopg2.connect(
+    dbname = DB_NAME,
+    user = DB_USER,
+    password = DB_PASSWORD,
+    host = DB_HOST,
+    port = DB_PORT
+)
+cursor = conn.cursor()
 
 # Primeira tela -> Login
 @app.route('/')
@@ -33,15 +33,16 @@ def login():
     senha = request.form['senha']
 
     try:
-        sql_query = text("SELECT id FROM USUARIO WHERE nome = :username AND senha = :password;")
-
-        DF = pd.read_sql_query(
-            sql=sql_query,
-            con=engine,
-            params={"username": nome, "password": senha}
+        # Use placeholders do psycopg2: %s (não :param)
+        cursor.execute(
+            "SELECT id FROM USUARIO WHERE nome = %s AND senha = %s;",
+            (nome, senha)
         )
-        
-        if not DF.empty:
+
+        # Recupera o resultado
+        usuario = cursor.fetchone()
+
+        if usuario:
             return redirect(url_for('home'))
         else:
             return render_template('login.html', erro="Usuário ou senha inválidos.")
