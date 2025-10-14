@@ -8,7 +8,7 @@
         <div class="card-body p-4">
             <h3 class="card-title mb-4 text-center">Importar Arquivo CSV</h3>
             
-            <form action="{{ url_for('importar_dados') }}" method="POST" enctype="multipart/form-data">
+            <form action="{{ url_for('processar_importacao') }}" method="POST" enctype="multipart/form-data">
                 <div class="mb-3">
                     <label for="arquivo" class="form-label">Selecione um arquivo CSV:</label>
                     <input type="file" class="form-control" id="arquivo" name="arquivo" accept=".csv" required>
@@ -16,8 +16,14 @@
                 
                 <div class="text-center">
                     <button type="submit" class="btn px-4" style="background-color: #2f8b4e; color: white;">Importar</button>
-                </div>  
+                    {% if erro %}
+                        <div class="alert alert-danger text-center mt-3">{{ erro }}</div>
+                    {% endif %}
 
+                    {% if sucesso %}
+                        <div class="alert alert-success text-center mt-3">{{ sucesso }}</div>
+                    {% endif %}
+                </div>  
             </form>
         </div>
     </div>
