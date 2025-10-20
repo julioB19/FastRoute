@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+build/
+develop-eggs/
+dist/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.manifest
+.project
+.vscode/
+
+# Flask-specific
+instance/
+.flaskenv
+
+# Editor-specific
+.idea/
+.DS_Store
+*.swp
+*~
