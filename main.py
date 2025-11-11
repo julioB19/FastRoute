@@ -200,5 +200,6 @@ def cadastrar_veiculo():
             erro=mensagem,
             request={'form': dados_form}
         )
+    
 if __name__ == '__main__':
     app.run(debug=True)

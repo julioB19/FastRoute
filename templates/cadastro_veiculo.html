@@ -1,64 +1,68 @@
-{% extends "htmlBase.html" %}
+    {% extends "htmlBase.html" %}
 
-{% block titulo %}Cadastro de Veículo{% endblock %}
+    {% block titulo %}Cadastro de Veículo{% endblock %}
 
-{% block conteudo %}
-<div class="container mt-5">
-    <div class="card shadow-lg border-0 rounded-4">
-        <div class="card-body p-4">
-            <h3 class="card-title mb-4 text-center">Cadastro de Veículo</h3>
-            
-            {% if mensagem_sucesso %}   
-                <div class="alert alert-success text-center" role="alert">
-                    {{ mensagem_sucesso }}
-                </div>
-            {% endif %}
-            
-            {% if erro %}   
-                <div class="alert alert-danger text-center" role="alert">
-                    {{ erro }}
-                </div>
-            {% endif %}
-
-            <form action="{{ url_for('cadastrar_veiculo') }}" method="POST">
+    {% block conteudo %}
+    <div class="container mt-5">
+        <div class="card shadow-lg border-0 rounded-4">
+            <div class="card-body p-4">
+                <h3 class="card-title mb-4 text-center">Cadastro de Veículo</h3>
                 
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label for="placaInput" class="form-label">Placa</label>
-                        <input type="text" class="form-control" id="placaInput" name="placa" required>
+                {% if mensagem_sucesso %}   
+                    <div class="alert alert-success text-center" role="alert">
+                        {{ mensagem_sucesso }}
+                    </div>
+                {% endif %}
+                
+                {% if erro %}   
+                    <div class="alert alert-danger text-center" role="alert">
+                        {{ erro }}
+                    </div>
+                {% endif %}
+
+                <form action="{{ url_for('cadastrar_veiculo') }}" method="POST">
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="placaInput" class="form-label">Placa</label>
+                            <input type="text" class="form-control" id="placaInput" name="placa" required>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="marcaInput" class="form-label">Marca</label>
+                            <input type="text" class="form-control" id="marcaInput" name="marca" required>
+                        </div>
+                    </div>          
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="modeloInput" class="form-label">Modelo</label>
+                            <input type="text" class="form-control" id="modeloInput" name="modelo" required>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="tipoCargaSelect" class="form-label">Tipo de Carga</label>
+                            <select class="form-select" id="tipoCargaSelect" name="tipo_carga" required>
+                                <option value="" selected disabled>Selecione o Tipo de Carga</option>
+                                <option value="1">Normal</option>
+                                <option value="2">Agrotóxico</option>
+                            </select>
+                        </div>
                     </div>
 
-                    <div class="col-md-6 mb-3">
-                        <label for="marcaInput" class="form-label">Marca</label>
-                        <input type="text" class="form-control" id="marcaInput" name="marca" required>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label for="modeloInput" class="form-label">Modelo</label>
-                        <input type="text" class="form-control" id="modeloInput" name="modelo" required>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="limitePesoInput" class="form-label">Limite de Peso (kg)</label>
+                            <input type="number" step="0.001" class="form-control" id="limitePesoInput" name="limite_peso" required>
+                        </div>
                     </div>
 
-                    <div class="col-md-6 mb-3">
-                        <label for="tipoCargaInput" class="form-label">Tipo de Carga (Código Interno)</label>
-                        <input type="number" class="form-control" id="tipoCargaInput" name="tipo_carga" required>
-                    </div>
-                </div>
+                    <div class="text-center mt-4">
+                        <button type="submit" class="btn btn-dark btn-lg px-5">Cadastrar Veículo</button>
+                    </div>  
 
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label for="limitePesoInput" class="form-label">Limite de Peso (kg)</label>
-                        <input type="number" step="0.001" class="form-control" id="limitePesoInput" name="limite_peso" required>
-                    </div>
-                </div>
-
-                <div class="text-center mt-4">
-                    <button type="submit" class="btn btn-dark btn-lg px-5">Cadastrar Veículo</button>
-                </div>  
-
-            </form>
+                </form>
+            </div>
         </div>
     </div>
-</div>
-{% endblock %}
+    {% endblock %}
