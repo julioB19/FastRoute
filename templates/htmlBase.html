@@ -134,18 +134,13 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link text-white">
-                        <i class="bi bi-table"></i> <span>Pedidos</span>
+                    <a href="{{ url_for('cadastro_veiculo') }}" class="nav-link text-white {% if request.endpoint == 'cadastro_veiculo' %}active{% endif %}">
+                        <i class="bi bi-truck"></i> <span>Veículos</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link text-white">
-                        <i class="bi bi-grid"></i> <span>Produtos</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="#" class="nav-link text-white">
-                        <i class="bi bi-person-circle"></i> <span>Clientes</span>
+                    <a href="{{ url_for('logout') }}" class="nav-link text-white">
+                        <i class="bi-box-arrow-left"></i> <span>Sair</span>
                     </a>
                 </li>
             </ul>
