@@ -44,3 +44,35 @@ def cadastrar_veiculo_db(conn, cursor, dados_veiculo):
         conn.rollback()
         print(f"Erro no DRM ao cadastrar veículo: {e}")
         return False, f"Erro interno do sistema ao cadastrar o veículo: {e}"
+    
+    
+def listar_veiculos_db(conn, cursor):
+    """
+    Retorna todos os veículos cadastrados e ativos.
+    """
+    try:
+        cursor.execute("""
+            SELECT PLACA, MARCA, MODELO, TIPO_CARGA, LIMITE_PESO 
+            FROM VEICULO
+            WHERE TIPO_CARGA <> 99
+            ORDER BY PLACA
+        """)
+        registros = cursor.fetchall()
+
+        print("Registros retornados:", registros)  # debug
+
+        veiculos = []
+        for r in registros:
+            veiculos.append({
+                "placa": r[0],
+                "marca": r[1],
+                "modelo": r[2],
+                "tipo_carga": r[3],
+                "limite_peso": r[4]
+            })
+
+        return veiculos
+
+    except Exception as e:
+        print("Erro ao listar veículos:", e)
+        return []

@@ -1,11 +1,11 @@
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 import pandas as pd
 import psycopg2
 import io
 import re
 from functools import wraps
 from form_importador import importar_dados_csv
-from form_cadastro_veiculos import cadastrar_veiculo_db
+from form_cadastro_veiculos import cadastrar_veiculo_db, listar_veiculos_db
 
 app = Flask(__name__)
 app.secret_key = 'fastrout'  # ⚠️ Mude para uma chave mais segura em produção!
@@ -168,11 +168,12 @@ def cadastrar_veiculo():
         return render_template(
             'cadastro_veiculo.html', 
             erro="Formato de Placa inválido. Use o padrão brasileiro de 7 caracteres (Ex: ABC1234 ou ABC1D23).",
-            request={'form': dados_form}
+            form=dados_form
         )
     
     # 2. VALIDAÇÃO DE TIPO DOS DEMAIS CAMPOS
     try:
+        
         dados_veiculo = {
             'placa': placa_input, 
             'marca': dados_form['marca'],
@@ -184,7 +185,7 @@ def cadastrar_veiculo():
         return render_template(
             'cadastro_veiculo.html', 
             erro="Erro de formato: Verifique se os campos numéricos (Tipo de Carga, Limite de Peso) foram preenchidos corretamente.",
-            request={'form': dados_form}
+            form=dados_form
         )
 
     # 3. CHAMA O DRM
@@ -196,10 +197,28 @@ def cadastrar_veiculo():
     else:
         # Falha: retorna erro e mantém os dados no formulário
         return render_template(
-            'cadastro_veiculo.html', 
+            'cadastro_veiculo.html',
             erro=mensagem,
-            request={'form': dados_form}
+            form=dados_form
         )
     
+#Consultar Veículos
+@app.route("/consultar_veiculos")
+def consultar_veiculos():
+    global conn, cursor
+
+    conn = conecta_db()
+    cursor = conn.cursor()
+
+    veiculos = listar_veiculos_db(conn, cursor)
+
+    return render_template(
+        "cadastro_veiculo.html",
+        veiculos=veiculos,
+        erro=None,
+        aba="consulta"
+    )    
+
+
 if __name__ == '__main__':
     app.run(debug=True)

@@ -28,44 +28,5 @@
             </form>
         </div>
     </div>
-
-    <!-- 🔹 Tabela de Clientes -->
-    <div class="card shadow-lg border-0 rounded-4 mt-5">
-        <div class="card-body p-4">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h4 class="card-title mb-0">Clientes Cadastrados</h4>
-                <!-- 🔘 Botão de atualização -->
-                <a href="{{ url_for('buscar_dados_clientes') }}" class="btn btn-sm" style="background-color: #2f8b4e; color: white;">
-                    Atualizar
-                </a>
-            </div>
-
-            {% if clientes and clientes|length > 0 %}
-            <div class="table-responsive">
-                <table class="table table-striped align-middle text-center">
-                    <thead class="table-success">
-                        <tr>
-                            <th>ID</th>
-                            <th>Nome do Cliente</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for c in clientes %}
-                        <tr>
-                            <td>{{ c[0] }}</td>
-                            <td>{{ c[1] }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-                <div class="alert alert-secondary text-center">
-                    Nenhum cliente cadastrado.
-                </div>
-            {% endif %}
-        </div>
-    </div>
-
 </div>
 {% endblock %}
