@@ -1,5 +1,6 @@
 import psycopg2
 
+
 def cadastrar_veiculo_db(conn, cursor, dados_veiculo):
     """
     Realiza a lógica de validação de duplicidade e inserção de um novo veículo
@@ -76,3 +77,29 @@ def listar_veiculos_db(conn, cursor):
     except Exception as e:
         print("Erro ao listar veículos:", e)
         return []
+
+def excluir_veiculo_db(conn, cursor, placa):
+    """
+    Exclui logicamente um veículo do banco de dados, marcando-o como inativo.
+    """
+    try:
+        # Marca o veículo como inativo definindo TIPO_CARGA para 99
+        cursor.execute("""
+            UPDATE VEICULO
+            SET TIPO_CARGA = 99
+            WHERE PLACA = %s
+        """, (placa,))
+        
+        if cursor.rowcount == 0:
+            conn.rollback()
+            return False, f"Nenhum veículo encontrado com a placa {placa}."
+
+        conn.commit()
+        return True, f"Veículo de placa {placa} excluído com sucesso!"
+
+    except Exception as e:
+        conn.rollback()
+        print(f"Erro ao excluir veículo: {e}")
+        return False, f"Erro interno do sistema ao excluir o veículo: {e}"
+
+

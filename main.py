@@ -5,7 +5,7 @@ import io
 import re
 from functools import wraps
 from form_importador import importar_dados_csv
-from form_cadastro_veiculos import cadastrar_veiculo_db, listar_veiculos_db
+from form_cadastro_veiculos import cadastrar_veiculo_db, listar_veiculos_db, excluir_veiculo_db
 
 app = Flask(__name__)
 app.secret_key = 'fastrout'  # ⚠️ Mude para uma chave mais segura em produção!
@@ -219,6 +219,16 @@ def consultar_veiculos():
         aba="consulta"
     )    
 
+#Excluir Veículo
+@app.route("/excluir_veiculo/<placa>", methods=["POST"])
+def excluir_veiculo(placa):
+    global conn, cursor
+
+    conn = conecta_db()
+    cursor = conn.cursor()
+
+    excluir_veiculo_db(conn, cursor, placa)
+    return redirect(url_for("consultar_veiculos", aba="consulta"))
 
 if __name__ == '__main__':
     app.run(debug=True)
