@@ -103,3 +103,64 @@ def excluir_veiculo_db(conn, cursor, placa):
         return False, f"Erro interno do sistema ao excluir o veículo: {e}"
 
 
+def buscar_veiculo_por_placa_db(conn, cursor, placa):
+    """
+    Busca um único veículo pela placa.
+    """
+    try:
+        cursor.execute("""
+            SELECT PLACA, MARCA, MODELO, TIPO_CARGA, LIMITE_PESO 
+            FROM VEICULO
+            WHERE PLACA = %s
+        """, (placa,))
+        r = cursor.fetchone()
+
+        if r:
+            veiculo = {
+                "placa": r[0],
+                "marca": r[1],
+                "modelo": r[2],
+                "tipo_carga": r[3],
+                "limite_peso": r[4]
+            }
+            return veiculo
+        return None
+
+    except Exception as e:
+        print(f"Erro ao buscar veículo por placa: {e}")
+        return None
+
+
+def atualizar_veiculo_db(conn, cursor, dados_veiculo):
+    """
+    Atualiza os dados de um veículo existente no banco de dados.
+    """
+    try:
+        placa = dados_veiculo['placa']
+        marca = dados_veiculo['marca']
+        modelo = dados_veiculo['modelo']
+        tipo_carga = dados_veiculo['tipo_carga']
+        limite_peso = dados_veiculo['limite_peso']
+
+        cursor.execute("""
+            UPDATE VEICULO 
+            SET MARCA = %s, 
+                MODELO = %s, 
+                TIPO_CARGA = %s, 
+                LIMITE_PESO = %s
+            WHERE PLACA = %s
+        """, (marca, modelo, tipo_carga, limite_peso, placa))
+        
+        if cursor.rowcount == 0:
+            conn.rollback()
+            return False, f"Nenhum veículo encontrado com a placa {placa} para atualizar."
+
+        conn.commit()
+        return True, f"Veículo de placa {placa} atualizado com sucesso!"
+
+    except Exception as e:
+        conn.rollback()
+        print(f"Erro no DRM ao atualizar veículo: {e}")
+        return False, f"Erro interno do sistema ao atualizar o veículo: {e}"
+
+

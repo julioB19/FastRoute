@@ -5,7 +5,7 @@ import io
 import re
 from functools import wraps
 from form_importador import importar_dados_csv
-from form_cadastro_veiculos import cadastrar_veiculo_db, listar_veiculos_db, excluir_veiculo_db
+from form_cadastro_veiculos import cadastrar_veiculo_db, listar_veiculos_db, excluir_veiculo_db, atualizar_veiculo_db
 
 app = Flask(__name__)
 app.secret_key = 'fastrout'  # ⚠️ Mude para uma chave mais segura em produção!
@@ -140,95 +140,127 @@ def buscar_dados_clientes():
     return render_template('importar.html', usuario=session.get('usuario_nome'), clientes=clientes)
 
 
-@app.route('/cadastro_veiculo', methods=['GET', 'POST'])
+# === ROTAS DE VEÍCULOS ===
+
+@app.route('/veiculos', methods=['GET'])
 @login_obrigatorio
-def cadastro_veiculo():
-    return render_template('cadastro_veiculo.html', usuario=session.get('usuario_nome'))    
-
-# Rota para processar o cadastro do Veículo (POST) - Endpoint: /cadastrar_veiculo
-@app.route('/cadastrar_veiculo', methods=['POST'])
-def cadastrar_veiculo():
-    global conn, cursor
-
+def veiculos_page():
+    """
+    Página principal de gerenciamento de veículos.
+    Exibe o formulário e a lista de veículos cadastrados.
+    """
     conn = conecta_db()
-    cursor = conn.cursor()    
-    # Regex para Placa Brasil: LLLNNNN (Antiga) ou LLLNLNN (Mercosul)
-    # A Placa deve ter 7 caracteres alfanuméricos no padrão LLL N [L/N] NN
+    cursor = conn.cursor()
+    
+    # Busca a lista de veículos para exibir na tabela
+    veiculos = listar_veiculos_db(conn, cursor)
+    
+    cursor.close()
+    conn.close()
+    
+    # Obtém mensagens de sucesso ou erro da query string (após redirecionamento)
+    mensagem_sucesso = request.args.get('mensagem_sucesso')
+    erro = request.args.get('erro')
+    
+    return render_template(
+        'cadastro_veiculo.html',
+        usuario=session.get('usuario_nome'),
+        veiculos=veiculos,
+        mensagem_sucesso=mensagem_sucesso,
+        erro=erro
+    )
+
+@app.route('/cadastrar_veiculo', methods=['POST'])
+@login_obrigatorio
+def cadastrar_veiculo():
+    """
+    Processa o formulário de cadastro de um novo veículo.
+    """
+    conn = conecta_db()
+    cursor = conn.cursor()
+    
     PLACA_REGEX = re.compile(r'^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$', re.IGNORECASE)
-
-    if not conn or not cursor:
-        return render_template('cadastro_veiculo.html', erro="Erro: Não foi possível conectar ao banco de dados.")
-
     dados_form = request.form
-    # Limpa espaços e converte para MAIÚSCULAS para padronizar a validação
     placa_input = dados_form.get('placa', '').strip().upper()
-    
-    # 1. VALIDAÇÃO DE REGEX DA PLACA
+
     if not PLACA_REGEX.match(placa_input):
-        return render_template(
-            'cadastro_veiculo.html', 
-            erro="Formato de Placa inválido. Use o padrão brasileiro de 7 caracteres (Ex: ABC1234 ou ABC1D23).",
-            form=dados_form
-        )
-    
-    # 2. VALIDAÇÃO DE TIPO DOS DEMAIS CAMPOS
+        # Em caso de erro, redireciona de volta para a página de veículos com a mensagem de erro
+        return redirect(url_for('veiculos_page', erro="Formato de Placa inválido. Use o padrão brasileiro de 7 caracteres (Ex: ABC1234 ou ABC1D23)."))
+
     try:
-        
         dados_veiculo = {
-            'placa': placa_input, 
+            'placa': placa_input,
             'marca': dados_form['marca'],
             'modelo': dados_form['modelo'],
             'tipo_carga': int(dados_form['tipo_carga']),
-            'limite_peso': float(dados_form['limite_peso']) 
+            'limite_peso': float(dados_form['limite_peso'])
         }
-    except ValueError:
-        return render_template(
-            'cadastro_veiculo.html', 
-            erro="Erro de formato: Verifique se os campos numéricos (Tipo de Carga, Limite de Peso) foram preenchidos corretamente.",
-            form=dados_form
-        )
+    except (ValueError, TypeError):
+        return redirect(url_for('veiculos_page', erro="Erro de formato: Verifique se todos os campos foram preenchidos corretamente."))
 
-    # 3. CHAMA O DRM
     sucesso, mensagem = cadastrar_veiculo_db(conn, cursor, dados_veiculo)
     
+    cursor.close()
+    conn.close()
+
     if sucesso:
-        # Padrão PRG: Redireciona para a rota GET para evitar reenvio do formulário
-        return redirect(url_for('cadastro_veiculo', mensagem_sucesso=mensagem)) 
+        return redirect(url_for('veiculos_page', mensagem_sucesso=mensagem))
     else:
-        # Falha: retorna erro e mantém os dados no formulário
-        return render_template(
-            'cadastro_veiculo.html',
-            erro=mensagem,
-            form=dados_form
-        )
+        return redirect(url_for('veiculos_page', erro=mensagem))
+
+@app.route('/atualizar_veiculo', methods=['POST'])
+@login_obrigatorio
+def atualizar_veiculo():
+    """
+    Processa o formulário de atualização de um veículo existente.
+    """
+    conn = conecta_db()
+    cursor = conn.cursor()
     
-#Consultar Veículos
-@app.route("/consultar_veiculos")
-def consultar_veiculos():
-    global conn, cursor
+    dados_form = request.form
+    
+    try:
+        # A placa original está em 'placa_original' e não pode ser alterada.
+        dados_veiculo = {
+            'placa': dados_form['placa_original'],
+            'marca': dados_form['marca'],
+            'modelo': dados_form['modelo'],
+            'tipo_carga': int(dados_form['tipo_carga']),
+            'limite_peso': float(dados_form['limite_peso'])
+        }
+    except (ValueError, TypeError):
+        return redirect(url_for('veiculos_page', erro="Erro de formato: Verifique se todos os campos foram preenchidos corretamente."))
 
-    conn = conecta_db()
-    cursor = conn.cursor()
+    sucesso, mensagem = atualizar_veiculo_db(conn, cursor, dados_veiculo)
+    
+    cursor.close()
+    conn.close()
 
-    veiculos = listar_veiculos_db(conn, cursor)
+    if sucesso:
+        return redirect(url_for('veiculos_page', mensagem_sucesso=mensagem))
+    else:
+        return redirect(url_for('veiculos_page', erro=mensagem))
 
-    return render_template(
-        "cadastro_veiculo.html",
-        veiculos=veiculos,
-        erro=None,
-        aba="consulta"
-    )    
 
-#Excluir Veículo
 @app.route("/excluir_veiculo/<placa>", methods=["POST"])
+@login_obrigatorio
 def excluir_veiculo(placa):
-    global conn, cursor
-
+    """
+    Processa a exclusão (lógica) de um veículo.
+    """
     conn = conecta_db()
     cursor = conn.cursor()
 
-    excluir_veiculo_db(conn, cursor, placa)
-    return redirect(url_for("consultar_veiculos", aba="consulta"))
+    sucesso, mensagem = excluir_veiculo_db(conn, cursor, placa)
+    
+    cursor.close()
+    conn.close()
+
+    if sucesso:
+        return redirect(url_for('veiculos_page', mensagem_sucesso=mensagem))
+    else:
+        return redirect(url_for('veiculos_page', erro=mensagem))
+
 
 if __name__ == '__main__':
     app.run(debug=True)
