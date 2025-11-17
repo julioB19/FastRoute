@@ -174,13 +174,17 @@
                                             </button>
 
                                             <!-- Botão Excluir -->
-                                            <form action="{{ url_for('excluir_veiculo', placa=veiculo.placa) }}" method="POST" style="display:inline;">
-                                                <button class="btn btn-danger btn-sm"
-                                                        title="Excluir"
-                                                        onclick="return confirm('Tem certeza que deseja inativar este veículo?');">
-                                                    <i class="bi bi-trash-fill"></i>
-                                                </button>
+                                            <form id="form-excluir-{{ veiculo.placa }}" 
+                                                action="{{ url_for('excluir_veiculo', placa=veiculo.placa) }}" 
+                                                method="POST" 
+                                                style="display:inline;">
                                             </form>
+
+                                            <button class="btn btn-danger btn-sm"
+                                                    title="Excluir"
+                                                    onclick="confirmarExclusao('{{ veiculo.placa }}')">
+                                                <i class="bi bi-trash-fill"></i>
+                                            </button>
 
                                         </td>
                                     </tr>
