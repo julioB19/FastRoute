@@ -7,7 +7,7 @@ class ServicoImportacao:
     def __init__(self, banco: BancoDados):
         self.banco = banco
 
-    def importar_dados_csv(self, arquivo):
+    def importar_dados_csv(self, arquivo, tamanho_lote: int = 500):
         try:
             df = pd.read_csv(io.StringIO(arquivo.stream.read().decode('utf-8')), sep=',')
             df = df[df['NfForCod'].notnull() & (df['NfForCod'] != '')]
@@ -16,9 +16,12 @@ class ServicoImportacao:
             df['ItemProCod'] = df['ItemProCod'].apply(lambda x: int(float(x)) if not pd.isna(x) else None)
 
             with self.banco.obter_cursor() as (conn, cursor):
-                for index, row in df.iterrows():
+                total_processadas = 0
+
+                for index, row in enumerate(df.itertuples(index=False), start=1):
+                    # Evita perder as linhas ja persistidas em caso de erro de formato
                     try:
-                        id_cliente = row['NfForCod']
+                        id_cliente = row.NfForCod
                         nome_cliente = f"Cliente {id_cliente}"
 
                         cursor.execute(
@@ -39,11 +42,11 @@ class ServicoImportacao:
                             """,
                             (
                                 id_cliente,
-                                row.get('MunNom'),
-                                row.get('TraBairro'),
-                                row.get('TraEnd'),
-                                str(row.get('TraNumEnd')) if pd.notna(row.get('TraNumEnd')) else None,
-                                row.get('TraComplemento'),
+                                row.MunNom,
+                                row.TraBairro,
+                                row.TraEnd,
+                                str(row.TraNumEnd) if pd.notna(row.TraNumEnd) else None,
+                                row.TraComplemento,
                             ),
                         )
 
@@ -57,13 +60,13 @@ class ServicoImportacao:
                                 AND tipo_logradouro = %s
                             LIMIT 1;
                             """,
-                            (id_cliente, row.get('MunNom'), row.get('TraBairro'), row.get('TraEnd')),
+                            (id_cliente, row.MunNom, row.TraBairro, row.TraEnd),
                         )
                         id_endereco = cursor.fetchone()[0]
 
-                        if row.get('ItemProCod'):
-                            fam = int(float(row.get('ProFamCod'))) if pd.notna(row.get('ProFamCod')) else None
-                            grp = int(float(row.get('ProGrpCod'))) if pd.notna(row.get('ProGrpCod')) else None
+                        if row.ItemProCod:
+                            fam = int(float(row.ProFamCod)) if pd.notna(row.ProFamCod) else None
+                            grp = int(float(row.ProGrpCod)) if pd.notna(row.ProGrpCod) else None
                             classificacao = 2 if fam == 2 and grp == 11 else 1
 
                             cursor.execute(
@@ -75,8 +78,8 @@ class ServicoImportacao:
                                     classificacao = EXCLUDED.classificacao;
                                 """,
                                 (
-                                    row['ItemProCod'],
-                                    row.get('ProNom', 'Produto sem nome'),
+                                    row.ItemProCod,
+                                    getattr(row, 'ProNom', 'Produto sem nome'),
                                     classificacao,
                                 ),
                             )
@@ -88,15 +91,12 @@ class ServicoImportacao:
                             ON CONFLICT (n_nota) DO UPDATE
                             SET dt_nota = EXCLUDED.dt_nota;
                             """,
-                            (row['NfNumero'], row['NfDatEmis'], id_cliente, id_endereco),
+                            (row.NfNumero, row.NfDatEmis, id_cliente, id_endereco),
                         )
 
-                        if row.get('ItemProCod'):
-                            qtd = (
-                                float(str(row.get('ItemQtdade')).replace(',', '.'))
-                                if pd.notna(row.get('ItemQtdade'))
-                                else 1.0
-                            )
+                        if row.ItemProCod:
+                            qtd_bruta = str(row.ItemQtdade) if pd.notna(row.ItemQtdade) else "1"
+                            qtd = float(qtd_bruta.replace(',', '.')) if qtd_bruta else 1.0
                             cursor.execute(
                                 """
                                 INSERT INTO PRODUTO_PEDIDO (pedido_n_nota, produto_id_produto, quant_pedido)
@@ -104,13 +104,18 @@ class ServicoImportacao:
                                 ON CONFLICT (pedido_n_nota, produto_id_produto) DO UPDATE
                                 SET quant_pedido = EXCLUDED.quant_pedido;
                                 """,
-                                (row['NfNumero'], row['ItemProCod'], qtd),
+                                (row.NfNumero, row.ItemProCod, qtd),
                             )
 
-                        conn.commit()
+                        total_processadas += 1
+                        if total_processadas % tamanho_lote == 0:
+                            conn.commit()
+
                     except Exception as linha_erro:
                         print(f"Erro na linha {index}: {linha_erro}")
                         conn.rollback()
+
+                conn.commit()
 
             return True, "Importacao concluida com sucesso!"
         except Exception as e:
