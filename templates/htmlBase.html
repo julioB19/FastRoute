@@ -258,6 +258,11 @@
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a href="{{ url_for('pagina_pedidos') }}" class="nav-link {% if request.endpoint == 'pagina_pedidos' %}active{% endif %}">
+                        <i class="bi bi-list-check"></i> <span>Pedidos</span>
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a href="{{ url_for('pagina_veiculos') }}" class="nav-link {% if request.endpoint == 'pagina_veiculos' %}active{% endif %}">
                         <i class="bi bi-truck"></i> <span>Veiculos</span>
                     </a>

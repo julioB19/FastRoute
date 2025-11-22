@@ -135,3 +135,25 @@ class ServicoImportacao:
         except Exception as e:
             print(f"Erro ao buscar clientes: {e}")
             return []
+
+    def listar_pedidos(self):
+        try:
+            with self.banco.obter_cursor() as (conn, cursor):
+                cursor.execute(
+                    """
+                    SELECT p.n_nota,
+                           p.dt_nota,
+                           c.nome_cliente,
+                           e.cidade,
+                           e.bairro,
+                           CONCAT_WS(' ', e.tipo_logradouro, e.numero, e.complemento) AS endereco
+                    FROM PEDIDO p
+                    LEFT JOIN CLIENTE c ON p.id_cliente = c.id_cliente
+                    LEFT JOIN ENDERECO_CLIENTE e ON p.id_endereco = e.id_endereco
+                    ORDER BY p.dt_nota DESC NULLS LAST, p.n_nota DESC;
+                    """
+                )
+                return cursor.fetchall()
+        except Exception as e:
+            print(f"Erro ao listar pedidos: {e}")
+            return []

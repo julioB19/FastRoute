@@ -86,6 +86,13 @@ def pagina_importacao():
     return render_template('importar.html', usuario=session.get('usuario_nome'), clientes=clientes)
 
 
+@app.route('/pedidos', methods=['GET'])
+@login_obrigatorio
+def pagina_pedidos():
+    pedidos = servico_importacao.listar_pedidos()
+    return render_template('pedidos.html', usuario=session.get('usuario_nome'), pedidos=pedidos)
+
+
 @app.route('/processar_importacao', methods=['POST'])
 @login_obrigatorio
 def processar_importacao():
