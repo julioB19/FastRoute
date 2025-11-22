@@ -1,9 +1,10 @@
-﻿from flask import Flask, render_template, request, redirect, url_for, session
+﻿from flask import Flask, render_template, request, redirect, url_for, session, abort
 import re
 from banco_dados import ConfiguracaoBanco, BancoDados
 from servico_autenticacao import ServicoAutenticacao
 from form_importador import ServicoImportacao
 from form_cadastro_veiculos import ServicoVeiculo
+from form_cadastro_usuarios import ServicoUsuario
 
 app = Flask(__name__)
 app.secret_key = 'fastrout'  # Troque para uma chave mais segura em producao
@@ -20,6 +21,7 @@ banco_dados = BancoDados(config_banco)
 servico_autenticacao = ServicoAutenticacao(banco_dados)
 servico_importacao = ServicoImportacao(banco_dados)
 servico_veiculo = ServicoVeiculo(banco_dados)
+servico_usuario = ServicoUsuario(banco_dados)
 
 
 # Decorator para exigir login
@@ -27,6 +29,18 @@ def login_obrigatorio(func):
     def wrapper(*args, **kwargs):
         if 'usuario_id' not in session:
             return redirect(url_for('login_page'))
+        return func(*args, **kwargs)
+
+    wrapper.__name__ = func.__name__
+    return wrapper
+
+
+def admin_obrigatorio(func):
+    def wrapper(*args, **kwargs):
+        if 'usuario_id' not in session:
+            return redirect(url_for('login_page'))
+        if session.get('usuario_cargo') != 1:
+            return abort(403)
         return func(*args, **kwargs)
 
     wrapper.__name__ = func.__name__
@@ -48,6 +62,7 @@ def realizar_login():
     if sucesso:
         session['usuario_id'] = usuario["id"]
         session['usuario_nome'] = usuario["nome"]
+        session['usuario_cargo'] = usuario["cargo"]
         return redirect(url_for('home'))
     return render_template('login.html', erro=mensagem)
 
@@ -61,7 +76,11 @@ def realizar_logout():
 @app.route('/home')
 @login_obrigatorio
 def home():
-    return render_template('home.html', usuario=session.get('usuario_nome'))
+    return render_template(
+        'home.html',
+        usuario=session.get('usuario_nome'),
+        cargo=session.get('usuario_cargo'),
+    )
 
 
 # Rotas de importacao
@@ -69,7 +88,12 @@ def home():
 @login_obrigatorio
 def pagina_importacao():
     clientes = servico_importacao.buscar_clientes()
-    return render_template('importar.html', usuario=session.get('usuario_nome'), clientes=clientes)
+    return render_template(
+        'importar.html',
+        usuario=session.get('usuario_nome'),
+        cargo=session.get('usuario_cargo'),
+        clientes=clientes,
+    )
 
 
 @app.route('/processar_importacao', methods=['POST'])
@@ -77,12 +101,27 @@ def pagina_importacao():
 def processar_importacao():
     arquivo = request.files.get('arquivo')
     if not arquivo:
-        return render_template('importar.html', erro="Nenhum arquivo selecionado.", usuario=session.get('usuario_nome'))
+        return render_template(
+            'importar.html',
+            erro="Nenhum arquivo selecionado.",
+            usuario=session.get('usuario_nome'),
+            cargo=session.get('usuario_cargo'),
+        )
 
     sucesso, mensagem = servico_importacao.importar_dados_csv(arquivo)
     if sucesso:
-        return render_template('importar.html', sucesso=mensagem, usuario=session.get('usuario_nome'))
-    return render_template('importar.html', erro=mensagem, usuario=session.get('usuario_nome'))
+        return render_template(
+            'importar.html',
+            sucesso=mensagem,
+            usuario=session.get('usuario_nome'),
+            cargo=session.get('usuario_cargo'),
+        )
+    return render_template(
+        'importar.html',
+        erro=mensagem,
+        usuario=session.get('usuario_nome'),
+        cargo=session.get('usuario_cargo'),
+    )
 
 
 # Rotas de veiculos
@@ -96,6 +135,7 @@ def pagina_veiculos():
     return render_template(
         'cadastro_veiculo.html',
         usuario=session.get('usuario_nome'),
+        cargo=session.get('usuario_cargo'),
         veiculos=veiculos,
         mensagem_sucesso=mensagem_sucesso,
         erro=erro,
@@ -162,6 +202,72 @@ def excluir_veiculo(placa):
     if sucesso:
         return redirect(url_for('pagina_veiculos', mensagem_sucesso=mensagem))
     return redirect(url_for('pagina_veiculos', erro=mensagem))
+
+
+# Rotas de usuarios
+@app.route('/usuarios', methods=['GET'])
+@admin_obrigatorio
+def pagina_usuarios():
+    usuarios = servico_usuario.listar_usuarios()
+    mensagem_sucesso = request.args.get('mensagem_sucesso')
+    erro = request.args.get('erro')
+
+    return render_template(
+        'cadastro_usuario.html',
+        usuario=session.get('usuario_nome'),
+        cargo=session.get('usuario_cargo'),
+        usuarios=usuarios,
+        mensagem_sucesso=mensagem_sucesso,
+        erro=erro,
+    )
+
+
+@app.route('/cadastrar_usuario', methods=['POST'])
+@admin_obrigatorio
+def cadastrar_usuario():
+    dados_form = request.form
+    try:
+        dados_usuario = {
+            'nome': dados_form['nome'].strip(),
+            'senha': dados_form['senha'],
+            'cargo': int(dados_form['cargo']),
+        }
+    except (ValueError, TypeError, KeyError):
+        return redirect(url_for('pagina_usuarios', erro="Erro de formato: verifique os campos."))
+
+    sucesso, mensagem = servico_usuario.cadastrar_usuario(dados_usuario)
+    if sucesso:
+        return redirect(url_for('pagina_usuarios', mensagem_sucesso=mensagem))
+    return redirect(url_for('pagina_usuarios', erro=mensagem))
+
+
+@app.route('/atualizar_usuario', methods=['POST'])
+@admin_obrigatorio
+def atualizar_usuario():
+    dados_form = request.form
+    try:
+        dados_usuario = {
+            'id': int(dados_form['usuario_id']),
+            'nome': dados_form['nome'].strip(),
+            'senha': dados_form['senha'],
+            'cargo': int(dados_form['cargo']),
+        }
+    except (ValueError, TypeError, KeyError):
+        return redirect(url_for('pagina_usuarios', erro="Erro de formato: verifique os campos."))
+
+    sucesso, mensagem = servico_usuario.atualizar_usuario(dados_usuario)
+    if sucesso:
+        return redirect(url_for('pagina_usuarios', mensagem_sucesso=mensagem))
+    return redirect(url_for('pagina_usuarios', erro=mensagem))
+
+
+@app.route('/excluir_usuario/<int:usuario_id>', methods=['POST'])
+@admin_obrigatorio
+def excluir_usuario(usuario_id):
+    sucesso, mensagem = servico_usuario.excluir_usuario(usuario_id)
+    if sucesso:
+        return redirect(url_for('pagina_usuarios', mensagem_sucesso=mensagem))
+    return redirect(url_for('pagina_usuarios', erro=mensagem))
 
 
 if __name__ == '__main__':
