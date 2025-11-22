@@ -194,6 +194,20 @@
             color: #fff;
         }
 
+        /* Upload */
+        .upload-dropzone {
+            border: 2px dashed var(--verde-claro);
+            background: rgba(47, 139, 78, 0.06);
+            border-radius: 16px;
+            padding: 1.25rem;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .upload-dropzone:hover {
+            border-color: var(--verde-medio);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+        }
+
         /* Responsividade */
         @media (max-width: 767.98px) {
             .sidebar-container {
@@ -248,11 +262,13 @@
                         <i class="bi bi-truck"></i> <span>Veiculos</span>
                     </a>
                 </li>
+                {% if session.get('cargo') == 1 %}
                 <li class="nav-item">
                     <a href="{{ url_for('pagina_usuarios') }}" class="nav-link {% if request.endpoint == 'pagina_usuarios' %}active{% endif %}">
                         <i class="bi bi-people"></i> <span>Usuarios</span>
                     </a>
                 </li>
+                {% endif %}
                 <li class="nav-item">
                     <a href="{{ url_for('realizar_logout') }}" class="nav-link">
                         <i class="bi-box-arrow-left"></i> <span>Sair</span>

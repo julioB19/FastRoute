@@ -9,8 +9,11 @@
                     <h3 class="card-title mb-4 text-center" style="color: var(--verde-escuro);">Importar Arquivo CSV</h3>
                     <form id="formImportacao" action="{{ url_for('processar_importacao') }}" method="POST" enctype="multipart/form-data">
                         <div class="mb-3">
-                            <label for="arquivo" class="form-label">Selecione um arquivo CSV:</label>
-                            <input type="file" class="form-control" id="arquivo" name="arquivo" accept=".csv" required>
+                            <div class="upload-dropzone text-center">
+                                <label for="arquivo" class="form-label fw-semibold">Selecione um arquivo CSV</label>
+                                <div class="text-muted small mb-2">Arraste e solte ou clique para escolher</div>
+                                <input type="file" class="form-control" id="arquivo" name="arquivo" accept=".csv" required>
+                            </div>
                         </div>
                         <div class="text-center">
                             <div id="barraProgressoContainer" class="progress mb-3 d-none" style="height: 18px;">
