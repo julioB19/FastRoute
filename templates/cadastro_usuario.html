@@ -1,0 +1,173 @@
+{% extends "htmlBase.html" %}
+
+{% block titulo %}Usuarios{% endblock %}
+
+{% block conteudo %}
+<div class="container-fluid mt-4 px-3 px-md-4">
+    <div class="row justify-content-center">
+        <div class="col-12 col-xl-11 col-xxl-10">
+            <div class="card shadow-lg border-0 rounded-4">
+                <div class="card-body p-3 p-md-4 p-lg-5">
+                    <h3 class="card-title mb-4 text-center" style="color: var(--verde-escuro);">Gerenciamento de Usuarios</h3>
+
+                    {% if mensagem_sucesso %}
+                        <div class="alert alert-success text-center" role="alert">
+                            {{ mensagem_sucesso }}
+                        </div>
+                    {% endif %}
+
+                    {% if erro %}
+                        <div class="alert alert-danger text-center" role="alert">
+                            {{ erro }}
+                        </div>
+                    {% endif %}
+
+                    <div id="form-container">
+                        <form id="usuarioForm" action="{{ url_for('cadastrar_usuario') }}" method="POST" class="mt-4">
+                            <input type="hidden" id="formAction" name="action" value="cadastrar">
+                            <input type="hidden" id="usuarioIdHidden" name="usuario_id" value="">
+
+                            <div class="row g-3">
+                                <div class="col-12 col-lg-6">
+                                    <label for="nomeInput" class="form-label">Nome</label>
+                                    <input type="text" class="form-control" id="nomeInput" name="nome" required>
+                                </div>
+                                <div class="col-12 col-lg-6">
+                                    <label for="senhaInput" class="form-label">Senha</label>
+                                    <input type="password" class="form-control" id="senhaInput" name="senha" required>
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mt-1">
+                                <div class="col-12 col-lg-6">
+                                    <label for="cargoSelect" class="form-label">Tipo de Usuario</label>
+                                    <select class="form-select" id="cargoSelect" name="cargo" required>
+                                        <option value="" selected disabled>Selecione o Tipo</option>
+                                        <option value="1">Administrador</option>
+                                        <option value="2">Comum</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="text-center mt-4">
+                                <button type="submit" id="submitButton" class="btn btn-cotri px-4">
+                                    Salvar
+                                </button>
+                                <button type="button" id="cancelButton" class="btn btn-outline-secondary px-4" style="display: none;">
+                                    Cancelar Edicao
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <hr class="my-5">
+
+                    <div id="consulta-container">
+                        <h5 class="mt-4" style="color: var(--verde-escuro);">Lista de Usuarios Cadastrados</h5>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mt-3">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Nome</th>
+                                        <th>Tipo</th>
+                                        <th>Acoes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% if usuarios %}
+                                        {% for usuario in usuarios %}
+                                        <tr data-id="{{ usuario.id }}" data-nome="{{ usuario.nome }}" data-cargo="{{ usuario.cargo }}">
+                                            <td>{{ usuario.nome }}</td>
+                                            <td>
+                                                {% if usuario.cargo == 1 %} Administrador
+                                                {% elif usuario.cargo == 2 %} Comum
+                                                {% else %} ---
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <button class="btn btn-outline-success btn-sm edit-btn" title="Editar">
+                                                    <i class="bi bi-pencil-square"></i>
+                                                </button>
+                                                <form id="form-excluir-{{ usuario.id }}" action="{{ url_for('excluir_usuario', usuario_id=usuario.id) }}" method="POST" style="display:inline;">
+                                                    <button type="button" class="btn btn-outline-danger btn-sm" title="Excluir" onclick="confirmarExclusaoUsuario('{{ usuario.id }}')">
+                                                        <i class="bi bi-trash-fill"></i>
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    {% else %}
+                                    <tr>
+                                        <td colspan="3" class="text-center">Nenhum usuario cadastrado.</td>
+                                    </tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('usuarioForm');
+    const actionInput = document.getElementById('formAction');
+    const usuarioIdHidden = document.getElementById('usuarioIdHidden');
+    const nomeInput = document.getElementById('nomeInput');
+    const senhaInput = document.getElementById('senhaInput');
+    const cargoSelect = document.getElementById('cargoSelect');
+    const submitButton = document.getElementById('submitButton');
+    const cancelButton = document.getElementById('cancelButton');
+
+    document.querySelectorAll('.edit-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const row = this.closest('tr');
+            const usuarioId = row.dataset.id;
+            nomeInput.value = row.dataset.nome;
+            cargoSelect.value = row.dataset.cargo;
+            senhaInput.value = '';
+
+            form.action = "{{ url_for('atualizar_usuario') }}";
+            actionInput.value = 'editar';
+            usuarioIdHidden.value = usuarioId;
+            nomeInput.readOnly = false;
+
+            submitButton.textContent = 'Atualizar Usuario';
+            cancelButton.style.display = 'inline-block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+    });
+
+    cancelButton.addEventListener('click', function() {
+        form.reset();
+        form.action = "{{ url_for('cadastrar_usuario') }}";
+        actionInput.value = 'cadastrar';
+        usuarioIdHidden.value = '';
+        nomeInput.readOnly = false;
+        submitButton.textContent = 'Salvar';
+        cancelButton.style.display = 'none';
+    });
+});
+
+function confirmarExclusaoUsuario(id) {
+    Swal.fire({
+        title: 'Tem certeza?',
+        text: "O usuario sera excluido.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Sim, excluir!',
+        cancelButtonText: 'Cancelar',
+        reverseButtons: true
+    }).then((result) => {
+        if (result.isConfirmed) {
+            document.getElementById("form-excluir-" + id).submit();
+        }
+    });
+}
+</script>
+{% endblock %}
