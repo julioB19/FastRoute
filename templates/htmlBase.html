@@ -249,6 +249,11 @@
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a href="{{ url_for('pagina_usuarios') }}" class="nav-link {% if request.endpoint == 'pagina_usuarios' %}active{% endif %}">
+                        <i class="bi bi-people"></i> <span>Usuarios</span>
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a href="{{ url_for('realizar_logout') }}" class="nav-link">
                         <i class="bi-box-arrow-left"></i> <span>Sair</span>
                     </a>

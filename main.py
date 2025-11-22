@@ -4,6 +4,7 @@ from banco_dados import ConfiguracaoBanco, BancoDados
 from servico_autenticacao import ServicoAutenticacao
 from form_importador import ServicoImportacao
 from form_cadastro_veiculos import ServicoVeiculo
+from form_cadastro_usuarios import ServicoUsuario
 
 app = Flask(__name__)
 app.secret_key = 'fastrout'  # Troque para uma chave mais segura em producao
@@ -20,6 +21,7 @@ banco_dados = BancoDados(config_banco)
 servico_autenticacao = ServicoAutenticacao(banco_dados)
 servico_importacao = ServicoImportacao(banco_dados)
 servico_veiculo = ServicoVeiculo(banco_dados)
+servico_usuario = ServicoUsuario(banco_dados)
 
 
 # Decorator para exigir login
@@ -162,6 +164,71 @@ def excluir_veiculo(placa):
     if sucesso:
         return redirect(url_for('pagina_veiculos', mensagem_sucesso=mensagem))
     return redirect(url_for('pagina_veiculos', erro=mensagem))
+
+
+# Rotas de usuarios
+@app.route('/usuarios', methods=['GET'])
+@login_obrigatorio
+def pagina_usuarios():
+    usuarios = servico_usuario.listar_usuarios()
+    mensagem_sucesso = request.args.get('mensagem_sucesso')
+    erro = request.args.get('erro')
+
+    return render_template(
+        'cadastro_usuario.html',
+        usuario=session.get('usuario_nome'),
+        usuarios=usuarios,
+        mensagem_sucesso=mensagem_sucesso,
+        erro=erro,
+    )
+
+
+@app.route('/cadastrar_usuario', methods=['POST'])
+@login_obrigatorio
+def cadastrar_usuario():
+    dados_form = request.form
+    try:
+        dados_usuario = {
+            'nome': dados_form['nome'].strip(),
+            'senha': dados_form['senha'],
+            'cargo': int(dados_form['cargo']),
+        }
+    except (ValueError, TypeError, KeyError):
+        return redirect(url_for('pagina_usuarios', erro="Erro de formato: verifique os campos."))
+
+    sucesso, mensagem = servico_usuario.cadastrar_usuario(dados_usuario)
+    if sucesso:
+        return redirect(url_for('pagina_usuarios', mensagem_sucesso=mensagem))
+    return redirect(url_for('pagina_usuarios', erro=mensagem))
+
+
+@app.route('/atualizar_usuario', methods=['POST'])
+@login_obrigatorio
+def atualizar_usuario():
+    dados_form = request.form
+    try:
+        dados_usuario = {
+            'id': int(dados_form['usuario_id']),
+            'nome': dados_form['nome'].strip(),
+            'senha': dados_form['senha'],
+            'cargo': int(dados_form['cargo']),
+        }
+    except (ValueError, TypeError, KeyError):
+        return redirect(url_for('pagina_usuarios', erro="Erro de formato: verifique os campos."))
+
+    sucesso, mensagem = servico_usuario.atualizar_usuario(dados_usuario)
+    if sucesso:
+        return redirect(url_for('pagina_usuarios', mensagem_sucesso=mensagem))
+    return redirect(url_for('pagina_usuarios', erro=mensagem))
+
+
+@app.route('/excluir_usuario/<int:usuario_id>', methods=['POST'])
+@login_obrigatorio
+def excluir_usuario(usuario_id):
+    sucesso, mensagem = servico_usuario.excluir_usuario(usuario_id)
+    if sucesso:
+        return redirect(url_for('pagina_usuarios', mensagem_sucesso=mensagem))
+    return redirect(url_for('pagina_usuarios', erro=mensagem))
 
 
 if __name__ == '__main__':
