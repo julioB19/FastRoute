@@ -36,9 +36,9 @@ class ServicoUsuario:
             with self.banco.obter_cursor() as (conn, cursor):
                 cursor.execute(
                     """
-                    SELECT ID_USUARIO, NOME, CARGO
+                    SELECT * 
                     FROM USUARIO
-                    WHERE CARGO <> 99
+                    WHERE CARGO <> '99'
                     ORDER BY NOME
                     """
                 )
@@ -57,7 +57,7 @@ class ServicoUsuario:
                 cursor.execute(
                     """
                     UPDATE USUARIO
-                    SET CARGO = 99
+                    SET CARGO = '99'
                     WHERE ID_USUARIO = %s
                     """,
                     (usuario_id,),
