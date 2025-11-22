@@ -53,7 +53,11 @@ class ServicoUsuario:
     def excluir_usuario(self, usuario_id: int) -> (bool, str):
         try:
             with self.banco.obter_cursor() as (conn, cursor):
-                cursor.execute("DELETE FROM USUARIO WHERE ID_USUARIO = %s", (usuario_id,))
+                cursor.execute(
+                    "UPDATE USUARIO SET cargo = 99 WHERE id_usuario = %s",
+                    (usuario_id,)
+                )
+
 
                 if cursor.rowcount == 0:
                     conn.rollback()
