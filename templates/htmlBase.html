@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -8,8 +8,33 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 
     <style>
+        :root {
+            --verde-escuro: #0f5132;
+            --verde-medio: #1b6a3f;
+            --verde-claro: #2f8b4e;
+            --amarelo: #f2c200;
+            --cinza-claro: #f7f7f7;
+            --cinza-borda: #e5e5e5;
+            --texto: #1f2933;
+        }
+
+        body {
+            font-family: "Poppins", "Segoe UI", sans-serif;
+            background: radial-gradient(circle at 12% 18%, rgba(242,194,0,0.06), transparent 30%),
+                        radial-gradient(circle at 82% 10%, rgba(47,139,78,0.18), transparent 28%),
+                        linear-gradient(180deg, #0f2a18 0%, #1f3d25 45%, #1a3320 100%);
+            color: var(--texto);
+        }
+
+        .card {
+            background: #f6f7f8;
+            border: 1px solid #e1e5ea;
+            box-shadow: 0 20px 45px rgba(0,0,0,0.10);
+        }
+
         /* Sidebar */
         .sidebar-container {
             height: 100vh;
@@ -17,66 +42,64 @@
             position: fixed;
             top: 0;
             left: 0;
-            background-color: #212529;
+            background: linear-gradient(180deg, var(--verde-escuro) 0%, var(--verde-medio) 100%);
             transition: width 0.3s, transform 0.3s ease;
             overflow-x: hidden;
             z-index: 1000;
         }
 
         .sidebar-container.collapsed {
-            width: 60px; /* Largura reduzida para mostrar apenas ícones */
+            width: 60px;
         }
 
-        /* Container do Título e Botão */
+        /* Container do Titulo e Botao */
         .sidebar-header {
-            display: flex; /* Permite colocar elementos lado a lado (ícone e título) */
+            display: flex;
             align-items: center;
             padding: 1rem;
-            height: 56px; /* Altura padrão para alinhar com o navbar */
-            background-color: #343a40; /* Cor de fundo diferente para destaque (opcional) */
+            height: 56px;
+            background-color: rgba(0, 0, 0, 0.12);
         }
 
         .sidebar-container.collapsed .sidebar-header {
-            justify-content: center; /* Centraliza o conteúdo (ícone do menu) quando colapsado */
-            padding: 0; /* Remove o padding para evitar corte */
+            justify-content: center;
+            padding: 0;
         }
 
         .sidebar-header h4 {
-            flex-grow: 1; /* Permite que o título use o espaço restante */
+            flex-grow: 1;
             margin: 0;
-            white-space: nowrap; /* Impede que o texto quebre linha */
-            overflow: hidden; /* Oculta o texto que excede a largura */
-            text-overflow: ellipsis; /* Adiciona '...' se o texto for cortado (opcional) */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
             transition: opacity 0.3s, max-width 0.3s;
         }
 
         .sidebar-container.collapsed .sidebar-header h4 {
-            display: none; /* Remove o título quando colapsado */
+            display: none;
         }
-        
-        /* Ajuste no botão de recolher para ser parte do header */
+
         #toggleSidebar {
-            /* Removendo o posicionamento fixed e z-index anterior */
-            position: static; 
-            top: auto; 
+            position: static;
+            top: auto;
             left: auto;
             z-index: auto;
-            margin-right: 10px; /* Espaçamento entre o ícone e o título */
+            margin-right: 10px;
+            background-color: rgba(255,255,255,0.12);
+            border: none;
         }
 
         .sidebar-container.collapsed #toggleSidebar {
             margin-right: 0;
         }
 
-        /* Oculta os textos dos links (span) quando colapsado */
         .sidebar-container.collapsed .nav-link span {
             display: none;
         }
-        
-        /* Garante que os ícones fiquem centralizados quando colapsado */
+
         .sidebar-container.collapsed .nav-link {
-            justify-content: center; /* Centraliza o ícone horizontalmente */
-            padding-left: 0.5rem; /* Ajuste o padding para colapsado */
+            justify-content: center;
+            padding-left: 0.5rem;
             padding-right: 0.5rem;
         }
 
@@ -84,9 +107,58 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            color: #f2f2f2;
+            border-radius: 12px;
+            margin-bottom: 0.35rem;
         }
 
-        /* Conteúdo principal */
+        .nav-link:hover {
+            background: rgba(255,255,255,0.12);
+        }
+
+        .sidebar-user {
+            position: absolute;
+            bottom: 1rem;
+            left: 1rem;
+            right: 1rem;
+            padding: 0.75rem 0.85rem;
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.18);
+            color: #f2f2f2;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .sidebar-user .user-avatar {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.18);
+            display: grid;
+            place-items: center;
+            font-size: 1.1rem;
+        }
+        .sidebar-user .user-name {
+            font-weight: 600;
+        }
+        .sidebar-user .user-label {
+            font-size: 0.72rem;
+            letter-spacing: 0.02em;
+            opacity: 0.85;
+            text-transform: uppercase;
+        }
+        .sidebar-container.collapsed .sidebar-user {
+            left: 0.75rem;
+            right: 0.75rem;
+            padding: 0.5rem;
+            justify-content: center;
+        }
+        .sidebar-container.collapsed .sidebar-user .user-label,
+        .sidebar-container.collapsed .sidebar-user .user-name {
+            display: none;
+        }
+
+        /* Conteudo principal */
         .main-content {
             margin-left: 250px;
             transition: margin-left 0.3s;
@@ -100,14 +172,26 @@
         /* Rolagem da sidebar */
         .sidebar {
             overflow-y: auto;
-            height: calc(100% - 56px); /* 100% menos a altura do header */
-            padding: 0 1rem 1rem 1rem; /* Ajuste do padding: topo removido */
+            height: calc(100% - 56px);
+            padding: 0 1rem 1rem 1rem;
         }
 
         /* Links ativos */
         .nav-link.active {
-            background-color: #2f8b4e !important;
-            color: white !important;
+            background: linear-gradient(90deg, var(--amarelo), var(--verde-claro));
+            color: #0f2a18 !important;
+            font-weight: 600;
+        }
+
+        /* Botao primario custom */
+        .btn-cotri {
+            background: linear-gradient(90deg, var(--verde-claro), var(--verde-medio));
+            color: #fff;
+            border: none;
+        }
+        .btn-cotri:hover {
+            background: linear-gradient(90deg, var(--verde-medio), var(--verde-escuro));
+            color: #fff;
         }
 
         /* Responsividade */
@@ -143,34 +227,43 @@
                 <i class="bi bi-list"></i>
             </button>
             <h4 class="text-white">FastRoute
-                <img src="{{ url_for('static', filename='images/iconeFastRouteBranco.png') }}" alt="Ícone" class="ms-auto" style="width: 90px; height: 40px; justify-content: left;">
+                <img src="{{ url_for('static', filename='images/iconeFastRouteBranco.png') }}" alt="Icone" class="ms-auto" style="width: 90px; height: 40px; justify-content: left;">
             </h4>
         </div>
 
         <nav class="sidebar text-white" >
             <ul class="nav nav-pills flex-column mb-auto">
                 <li class="nav-item">
-                    <a href="{{ url_for('home') }}" class="nav-link text-white {% if request.endpoint == 'home' %}active{% endif %}">
+                    <a href="{{ url_for('home') }}" class="nav-link {% if request.endpoint == 'home' %}active{% endif %}">
                         <i class="bi bi-box-seam"></i> <span>Entregas</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="{{ url_for('pagina_importacao') }}" class="nav-link text-white {% if request.endpoint == 'pagina_importacao' %}active{% endif %}">
+                    <a href="{{ url_for('pagina_importacao') }}" class="nav-link {% if request.endpoint == 'pagina_importacao' %}active{% endif %}">
                         <i class="bi bi-upload"></i> <span>Importar Dados</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="{{ url_for('pagina_veiculos') }}" class="nav-link text-white {% if request.endpoint == 'pagina_veiculos' %}active{% endif %}">
-                        <i class="bi bi-truck"></i> <span>Veículos</span>
+                    <a href="{{ url_for('pagina_veiculos') }}" class="nav-link {% if request.endpoint == 'pagina_veiculos' %}active{% endif %}">
+                        <i class="bi bi-truck"></i> <span>Veiculos</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="{{ url_for('realizar_logout') }}" class="nav-link text-white">
+                    <a href="{{ url_for('realizar_logout') }}" class="nav-link">
                         <i class="bi-box-arrow-left"></i> <span>Sair</span>
                     </a>
                 </li>
             </ul>
         </nav>
+        <div class="sidebar-user">
+            <div class="user-avatar">
+                <i class="bi bi-person-fill"></i>
+            </div>
+            <div>
+                <div class="user-label">Usuário</div>
+                <div class="user-name">{{ usuario or 'Visitante' }}</div>
+            </div>
+        </div>
     </div>
 
     <main id="mainContent" class="main-content">
@@ -222,7 +315,7 @@
         function confirmarExclusao(placa) {
             Swal.fire({
                 title: 'Tem certeza?',
-                text: "O veículo será excluido.",
+                text: "O veiculo sera excluido.",
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#d33',
