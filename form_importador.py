@@ -1,4 +1,7 @@
-﻿import io
+import io
+import math
+from datetime import date, datetime
+
 import pandas as pd
 from banco_dados import BancoDados
 
@@ -135,3 +138,63 @@ class ServicoImportacao:
         except Exception as e:
             print(f"Erro ao buscar clientes: {e}")
             return []
+
+    def listar_pedidos(self, pagina: int = 1, itens_por_pagina: int = 10):
+        try:
+            pagina = max(int(pagina), 1)
+            itens_por_pagina = max(int(itens_por_pagina), 1)
+        except (TypeError, ValueError):
+            pagina = 1
+            itens_por_pagina = 10
+
+        try:
+            with self.banco.obter_cursor() as (conn, cursor):
+                cursor.execute("SELECT COUNT(*) FROM PEDIDO;")
+                total_registros = cursor.fetchone()[0] or 0
+
+                total_paginas = max(math.ceil(total_registros / itens_por_pagina), 1) if total_registros else 1
+                pagina = min(pagina, total_paginas)
+                offset = (pagina - 1) * itens_por_pagina
+
+                cursor.execute(
+                    """
+                    SELECT
+                        p.n_nota,
+                        p.dt_nota,
+                        p.id_cliente,
+                        c.nome_cliente
+                    FROM PEDIDO p
+                    LEFT JOIN CLIENTE c ON c.id_cliente = p.id_cliente
+                    ORDER BY p.dt_nota DESC NULLS LAST, p.n_nota DESC
+                    LIMIT %s OFFSET %s;
+                    """,
+                    (itens_por_pagina, offset),
+                )
+                colunas = [descricao[0].lower() for descricao in cursor.description]
+                pedidos = [dict(zip(colunas, linha)) for linha in cursor.fetchall()]
+
+            for pedido in pedidos:
+                data_nota = pedido.get("dt_nota")
+                if isinstance(data_nota, (datetime, date)):
+                    pedido["dt_nota_formatada"] = data_nota.strftime("%d/%m/%Y")
+                elif data_nota:
+                    pedido["dt_nota_formatada"] = str(data_nota)
+                else:
+                    pedido["dt_nota_formatada"] = None
+
+            return {
+                "pedidos": pedidos,
+                "pagina": pagina,
+                "total_paginas": total_paginas,
+                "total_registros": total_registros,
+                "itens_por_pagina": itens_por_pagina,
+            }
+        except Exception as e:
+            print(f"Erro ao listar pedidos: {e}")
+            return {
+                "pedidos": [],
+                "pagina": 1,
+                "total_paginas": 1,
+                "total_registros": 0,
+                "itens_por_pagina": itens_por_pagina,
+            }

@@ -88,11 +88,19 @@ def home():
 @login_obrigatorio
 def pagina_importacao():
     clientes = servico_importacao.buscar_clientes()
+    pagina = request.args.get('pagina', default=1, type=int)
+    paginacao_pedidos = servico_importacao.listar_pedidos(pagina)
     return render_template(
         'importar.html',
         usuario=session.get('usuario_nome'),
         cargo=session.get('usuario_cargo'),
         clientes=clientes,
+        pedidos=paginacao_pedidos["pedidos"],
+        pagina_atual=paginacao_pedidos["pagina"],
+        total_paginas=paginacao_pedidos["total_paginas"],
+        total_registros=paginacao_pedidos["total_registros"],
+        sucesso=request.args.get('sucesso'),
+        erro=request.args.get('erro'),
     )
 
 
@@ -101,27 +109,12 @@ def pagina_importacao():
 def processar_importacao():
     arquivo = request.files.get('arquivo')
     if not arquivo:
-        return render_template(
-            'importar.html',
-            erro="Nenhum arquivo selecionado.",
-            usuario=session.get('usuario_nome'),
-            cargo=session.get('usuario_cargo'),
-        )
+        return redirect(url_for('pagina_importacao', erro="Nenhum arquivo selecionado."))
 
     sucesso, mensagem = servico_importacao.importar_dados_csv(arquivo)
     if sucesso:
-        return render_template(
-            'importar.html',
-            sucesso=mensagem,
-            usuario=session.get('usuario_nome'),
-            cargo=session.get('usuario_cargo'),
-        )
-    return render_template(
-        'importar.html',
-        erro=mensagem,
-        usuario=session.get('usuario_nome'),
-        cargo=session.get('usuario_cargo'),
-    )
+        return redirect(url_for('pagina_importacao', sucesso=mensagem))
+    return redirect(url_for('pagina_importacao', erro=mensagem))
 
 
 # Rotas de veiculos
