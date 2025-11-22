@@ -18,7 +18,7 @@
             top: 0;
             left: 0;
             background-color: #212529;
-            transition: width 0.3s;
+            transition: width 0.3s, transform 0.3s ease;
             overflow-x: hidden;
             z-index: 1000;
         }
@@ -90,6 +90,8 @@
         .main-content {
             margin-left: 250px;
             transition: margin-left 0.3s;
+            padding-left: 1.5rem;
+            padding-right: 1.5rem;
         }
         .main-content.collapsed {
             margin-left: 60px;
@@ -106,6 +108,29 @@
         .nav-link.active {
             background-color: #2f8b4e !important;
             color: white !important;
+        }
+
+        /* Responsividade */
+        @media (max-width: 767.98px) {
+            .sidebar-container {
+                width: 260px;
+                transform: translateX(-100%);
+                box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+            }
+            .sidebar-container.collapsed {
+                width: 260px;
+                transform: translateX(-100%);
+            }
+            .sidebar-container.aberta {
+                transform: translateX(0);
+            }
+            .sidebar-container.collapsed .sidebar-header h4 {
+                display: none;
+            }
+            .main-content,
+            .main-content.collapsed {
+                margin-left: 0;
+            }
         }
     </style>
 </head>
@@ -130,17 +155,17 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="{{ url_for('importar_dados') }}" class="nav-link text-white {% if request.endpoint == 'importar_dados' %}active{% endif %}">
+                    <a href="{{ url_for('pagina_importacao') }}" class="nav-link text-white {% if request.endpoint == 'pagina_importacao' %}active{% endif %}">
                         <i class="bi bi-upload"></i> <span>Importar Dados</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="{{ url_for('veiculos_page') }}" class="nav-link text-white {% if request.endpoint == 'veiculos_page' %}active{% endif %}">
+                    <a href="{{ url_for('pagina_veiculos') }}" class="nav-link text-white {% if request.endpoint == 'pagina_veiculos' %}active{% endif %}">
                         <i class="bi bi-truck"></i> <span>Veículos</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="{{ url_for('logout') }}" class="nav-link text-white">
+                    <a href="{{ url_for('realizar_logout') }}" class="nav-link text-white">
                         <i class="bi-box-arrow-left"></i> <span>Sair</span>
                     </a>
                 </li>
@@ -159,11 +184,39 @@
         const toggleBtn = document.getElementById('toggleSidebar');
         const sidebar = document.getElementById('sidebarContainer');
         const main = document.getElementById('mainContent');
+        const limiteMobile = 767;
+
+        const ajustarLayoutResponsivo = () => {
+            const isMobile = window.innerWidth <= limiteMobile;
+            if (isMobile) {
+                main.classList.remove('collapsed');
+                if (!sidebar.classList.contains('aberta')) {
+                    sidebar.classList.add('collapsed');
+                }
+            } else {
+                sidebar.classList.remove('aberta');
+                if (sidebar.classList.contains('collapsed')) {
+                    main.classList.add('collapsed');
+                } else {
+                    main.classList.remove('collapsed');
+                }
+            }
+        };
 
         toggleBtn.addEventListener('click', () => {
-            sidebar.classList.toggle('collapsed');
-            main.classList.toggle('collapsed');
+            const isMobile = window.innerWidth <= limiteMobile;
+            if (isMobile) {
+                const estaAberta = sidebar.classList.contains('aberta');
+                sidebar.classList.toggle('aberta', !estaAberta);
+                sidebar.classList.toggle('collapsed', estaAberta);
+            } else {
+                sidebar.classList.toggle('collapsed');
+                main.classList.toggle('collapsed');
+            }
         });
+
+        window.addEventListener('resize', ajustarLayoutResponsivo);
+        ajustarLayoutResponsivo();
     </script>
     <script>
         function confirmarExclusao(placa) {

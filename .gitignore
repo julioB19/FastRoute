@@ -31,3 +31,5 @@ instance/
 .DS_Store
 *.swp
 *~
+codex.text
+__codex_write_test.txt

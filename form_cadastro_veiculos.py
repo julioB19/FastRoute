@@ -1,166 +1,143 @@
-import psycopg2
+﻿from typing import Dict, List, Optional
+from banco_dados import BancoDados
 
 
-def cadastrar_veiculo_db(conn, cursor, dados_veiculo):
-    """
-    Realiza a lógica de validação de duplicidade e inserção de um novo veículo
-    no banco de dados.
+class ServicoVeiculo:
+    def __init__(self, banco: BancoDados):
+        self.banco = banco
 
-    Args:
-        conn: Objeto de conexão com o banco de dados (psycopg2).
-        cursor: Objeto cursor do banco de dados (psycopg2).
-        dados_veiculo (dict): Dicionário contendo os dados do veículo.
+    def cadastrar_veiculo(self, dados_veiculo: Dict) -> (bool, str):
+        try:
+            placa = dados_veiculo['placa']
+            marca = dados_veiculo['marca']
+            modelo = dados_veiculo['modelo']
+            tipo_carga = dados_veiculo['tipo_carga']
+            limite_peso = dados_veiculo['limite_peso']
 
-    Returns:
-        tuple: (True, mensagem_sucesso) em caso de sucesso, 
-               (False, mensagem_erro) em caso de falha.
-    """
-    try:
-        placa = dados_veiculo['placa']
-        marca = dados_veiculo['marca']
-        modelo = dados_veiculo['modelo']
-        tipo_carga = dados_veiculo['tipo_carga']
-        limite_peso = dados_veiculo['limite_peso']
+            with self.banco.obter_cursor() as (conn, cursor):
+                cursor.execute("SELECT 1 FROM VEICULO WHERE PLACA = %s", (placa,))
+                if cursor.fetchone() is not None:
+                    conn.rollback()
+                    return False, f"Ja existe um veiculo cadastrado com a placa {placa}."
 
-        # 1. VERIFICAR EXISTÊNCIA (RNF07)
-        # Verifica se já existe um veículo com a mesma PLACA (chave primária)
-        cursor.execute("SELECT 1 FROM VEICULO WHERE PLACA = %s", (placa,))
-        if cursor.fetchone() is not None:
-            conn.rollback() 
-            return False, f"Já existe um veículo cadastrado com a placa {placa}. A Placa é uma chave única e não pode ser duplicada."
-        
-        # 2. INSERÇÃO (INSERT)
-        cursor.execute("""
-            INSERT INTO VEICULO (PLACA, MARCA, MODELO, TIPO_CARGA, LIMITE_PESO)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (placa, marca, modelo, tipo_carga, limite_peso))
-        
-        # 3. TRANSAÇÃO BEM SUCEDIDA (COMMIT)
-        conn.commit()
+                cursor.execute(
+                    """
+                    INSERT INTO VEICULO (PLACA, MARCA, MODELO, TIPO_CARGA, LIMITE_PESO)
+                    VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (placa, marca, modelo, tipo_carga, limite_peso),
+                )
+                conn.commit()
+                return True, f"Veiculo de placa {placa} cadastrado com sucesso!"
 
-        return True, f"Veículo de placa {placa} cadastrado com sucesso!"
+        except Exception as e:
+            print(f"Erro ao cadastrar veiculo: {e}")
+            return False, f"Erro ao cadastrar veiculo: {e}"
 
-    except Exception as e:
-        # 4. TRANSAÇÃO FALHA (ROLLBACK)
-        conn.rollback()
-        print(f"Erro no DRM ao cadastrar veículo: {e}")
-        return False, f"Erro interno do sistema ao cadastrar o veículo: {e}"
-    
-    
-def listar_veiculos_db(conn, cursor):
-    """
-    Retorna todos os veículos cadastrados e ativos.
-    """
-    try:
-        cursor.execute("""
-            SELECT PLACA, MARCA, MODELO, TIPO_CARGA, LIMITE_PESO 
-            FROM VEICULO
-            WHERE TIPO_CARGA <> 99
-            ORDER BY PLACA
-        """)
-        registros = cursor.fetchall()
+    def listar_veiculos(self) -> List[Dict]:
+        try:
+            with self.banco.obter_cursor() as (conn, cursor):
+                cursor.execute(
+                    """
+                    SELECT PLACA, MARCA, MODELO, TIPO_CARGA, LIMITE_PESO
+                    FROM VEICULO
+                    WHERE TIPO_CARGA <> 99
+                    ORDER BY PLACA
+                    """
+                )
+                registros = cursor.fetchall()
+                veiculos = []
+                for r in registros:
+                    veiculos.append(
+                        {
+                            "placa": r[0],
+                            "marca": r[1],
+                            "modelo": r[2],
+                            "tipo_carga": r[3],
+                            "limite_peso": r[4],
+                        }
+                    )
+                return veiculos
+        except Exception as e:
+            print(f"Erro ao listar veiculos: {e}")
+            return []
 
-        print("Registros retornados:", registros)  # debug
+    def excluir_veiculo(self, placa: str) -> (bool, str):
+        try:
+            with self.banco.obter_cursor() as (conn, cursor):
+                cursor.execute(
+                    """
+                    UPDATE VEICULO
+                    SET TIPO_CARGA = 99
+                    WHERE PLACA = %s
+                    """,
+                    (placa,),
+                )
 
-        veiculos = []
-        for r in registros:
-            veiculos.append({
-                "placa": r[0],
-                "marca": r[1],
-                "modelo": r[2],
-                "tipo_carga": r[3],
-                "limite_peso": r[4]
-            })
+                if cursor.rowcount == 0:
+                    conn.rollback()
+                    return False, f"Nenhum veiculo encontrado com a placa {placa}."
 
-        return veiculos
+                conn.commit()
+                return True, f"Veiculo de placa {placa} excluido com sucesso!"
 
-    except Exception as e:
-        print("Erro ao listar veículos:", e)
-        return []
+        except Exception as e:
+            print(f"Erro ao excluir veiculo: {e}")
+            return False, f"Erro ao excluir veiculo: {e}"
 
-def excluir_veiculo_db(conn, cursor, placa):
-    """
-    Exclui logicamente um veículo do banco de dados, marcando-o como inativo.
-    """
-    try:
-        # Marca o veículo como inativo definindo TIPO_CARGA para 99
-        cursor.execute("""
-            UPDATE VEICULO
-            SET TIPO_CARGA = 99
-            WHERE PLACA = %s
-        """, (placa,))
-        
-        if cursor.rowcount == 0:
-            conn.rollback()
-            return False, f"Nenhum veículo encontrado com a placa {placa}."
+    def buscar_por_placa(self, placa: str) -> Optional[Dict]:
+        try:
+            with self.banco.obter_cursor() as (conn, cursor):
+                cursor.execute(
+                    """
+                    SELECT PLACA, MARCA, MODELO, TIPO_CARGA, LIMITE_PESO
+                    FROM VEICULO
+                    WHERE PLACA = %s
+                    """,
+                    (placa,),
+                )
+                r = cursor.fetchone()
+                if r:
+                    return {
+                        "placa": r[0],
+                        "marca": r[1],
+                        "modelo": r[2],
+                        "tipo_carga": r[3],
+                        "limite_peso": r[4],
+                    }
+                return None
+        except Exception as e:
+            print(f"Erro ao buscar veiculo por placa: {e}")
+            return None
 
-        conn.commit()
-        return True, f"Veículo de placa {placa} excluído com sucesso!"
+    def atualizar_veiculo(self, dados_veiculo: Dict) -> (bool, str):
+        try:
+            placa = dados_veiculo['placa']
+            marca = dados_veiculo['marca']
+            modelo = dados_veiculo['modelo']
+            tipo_carga = dados_veiculo['tipo_carga']
+            limite_peso = dados_veiculo['limite_peso']
 
-    except Exception as e:
-        conn.rollback()
-        print(f"Erro ao excluir veículo: {e}")
-        return False, f"Erro interno do sistema ao excluir o veículo: {e}"
+            with self.banco.obter_cursor() as (conn, cursor):
+                cursor.execute(
+                    """
+                    UPDATE VEICULO
+                    SET MARCA = %s,
+                        MODELO = %s,
+                        TIPO_CARGA = %s,
+                        LIMITE_PESO = %s
+                    WHERE PLACA = %s
+                    """,
+                    (marca, modelo, tipo_carga, limite_peso, placa),
+                )
 
+                if cursor.rowcount == 0:
+                    conn.rollback()
+                    return False, f"Nenhum veiculo encontrado com a placa {placa} para atualizar."
 
-def buscar_veiculo_por_placa_db(conn, cursor, placa):
-    """
-    Busca um único veículo pela placa.
-    """
-    try:
-        cursor.execute("""
-            SELECT PLACA, MARCA, MODELO, TIPO_CARGA, LIMITE_PESO 
-            FROM VEICULO
-            WHERE PLACA = %s
-        """, (placa,))
-        r = cursor.fetchone()
+                conn.commit()
+                return True, f"Veiculo de placa {placa} atualizado com sucesso!"
 
-        if r:
-            veiculo = {
-                "placa": r[0],
-                "marca": r[1],
-                "modelo": r[2],
-                "tipo_carga": r[3],
-                "limite_peso": r[4]
-            }
-            return veiculo
-        return None
-
-    except Exception as e:
-        print(f"Erro ao buscar veículo por placa: {e}")
-        return None
-
-
-def atualizar_veiculo_db(conn, cursor, dados_veiculo):
-    """
-    Atualiza os dados de um veículo existente no banco de dados.
-    """
-    try:
-        placa = dados_veiculo['placa']
-        marca = dados_veiculo['marca']
-        modelo = dados_veiculo['modelo']
-        tipo_carga = dados_veiculo['tipo_carga']
-        limite_peso = dados_veiculo['limite_peso']
-
-        cursor.execute("""
-            UPDATE VEICULO 
-            SET MARCA = %s, 
-                MODELO = %s, 
-                TIPO_CARGA = %s, 
-                LIMITE_PESO = %s
-            WHERE PLACA = %s
-        """, (marca, modelo, tipo_carga, limite_peso, placa))
-        
-        if cursor.rowcount == 0:
-            conn.rollback()
-            return False, f"Nenhum veículo encontrado com a placa {placa} para atualizar."
-
-        conn.commit()
-        return True, f"Veículo de placa {placa} atualizado com sucesso!"
-
-    except Exception as e:
-        conn.rollback()
-        print(f"Erro no DRM ao atualizar veículo: {e}")
-        return False, f"Erro interno do sistema ao atualizar o veículo: {e}"
-
-
+        except Exception as e:
+            print(f"Erro ao atualizar veiculo: {e}")
+            return False, f"Erro ao atualizar veiculo: {e}"
