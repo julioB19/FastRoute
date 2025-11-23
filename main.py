@@ -100,17 +100,11 @@ def home():
 @login_obrigatorio
 def pagina_importacao():
     clientes = servico_importacao.buscar_clientes()
-    pagina = request.args.get('pagina', default=1, type=int)
-    paginacao_pedidos = servico_importacao.listar_pedidos(pagina) if hasattr(servico_importacao, 'listar_pedidos') else {"pedidos": [], "pagina": 1, "total_paginas": 1, "total_registros": 0}
     return render_template(
         'importar.html',
         usuario=session.get('usuario_nome'),
         cargo=session.get('usuario_cargo'),
         clientes=clientes,
-        pedidos=paginacao_pedidos.get("pedidos"),
-        pagina_atual=paginacao_pedidos.get("pagina"),
-        total_paginas=paginacao_pedidos.get("total_paginas"),
-        total_registros=paginacao_pedidos.get("total_registros"),
         sucesso=request.args.get('sucesso'),
         erro=request.args.get('erro'),
     )
@@ -325,7 +319,6 @@ def entregas_pendentes():
         return render_template('entregas_pendentes.html', usuario=session.get('usuario_nome'), pedidos=pag.get('pedidos'), pagina=pag.get('pagina'), total_paginas=pag.get('total_paginas'))
     except TemplateNotFound:
         return jsonify({"pedidos": pag.get('pedidos'), "pagina": pag.get('pagina'), "total_paginas": pag.get('total_paginas')})
-
 
 if __name__ == '__main__':
     app.run(debug=True)

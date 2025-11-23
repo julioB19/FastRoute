@@ -7,18 +7,23 @@
             <div class="card shadow-lg border-0 rounded-4">
                 <div class="card-body p-3 p-md-4 p-lg-5">
                     <h3 class="card-title mb-4 text-center" style="color: var(--verde-escuro);">Importar Arquivo CSV</h3>
+                    
                     <form id="formImportacao" action="{{ url_for('processar_importacao') }}" method="POST" enctype="multipart/form-data">
                         <div class="mb-3">
                             <label for="arquivo" class="form-label">Selecione um arquivo CSV:</label>
                             <input type="file" class="form-control" id="arquivo" name="arquivo" accept=".csv" required>
                         </div>
+
                         <div class="text-center">
                             <div id="barraProgressoContainer" class="progress mb-3 d-none" style="height: 18px;">
-                                <div id="barraProgresso" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                <div id="barraProgresso" class="progress-bar progress-bar-striped progress-bar-animated"
+                                     role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
                                     Iniciando...
                                 </div>
                             </div>
+
                             <button id="btnImportar" type="submit" class="btn btn-cotri px-4">Importar</button>
+
                             {% if erro %}
                                 <div class="alert alert-danger text-center mt-3">{{ erro }}</div>
                             {% endif %}
@@ -27,60 +32,13 @@
                             {% endif %}
                         </div>
                     </form>
-                    <div class="mt-5">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h5 class="mb-0" style="color: var(--verde-escuro);">Pedidos importados</h5>
-                            <span class="text-muted small">Total: {{ total_registros }}</span>
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-2">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th scope="col">Nota</th>
-                                        <th scope="col">Data</th>
-                                        <th scope="col">ID Cliente</th>
-                                        <th scope="col">Nome do Cliente</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% if pedidos %}
-                                        {% for pedido in pedidos %}
-                                            <tr>
-                                                <td>{{ pedido.n_nota }}</td>
-                                                <td>{{ pedido.dt_nota_formatada if pedido.dt_nota_formatada else 'Sem data' }}</td>
-                                                <td>{{ pedido.id_cliente }}</td>
-                                                <td>{{ pedido.nome_cliente if pedido.nome_cliente else '—' }}</td>
-                                            </tr>
-                                        {% endfor %}
-                                    {% else %}
-                                        <tr>
-                                            <td colspan="4" class="text-center text-muted py-4">Nenhum pedido importado até o momento.</td>
-                                        </tr>
-                                    {% endif %}
-                                </tbody>
-                            </table>
-                        </div>
-                        {% if total_paginas > 1 %}
-                            <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3 mt-3">
-                                <a class="btn btn-outline-secondary btn-sm px-3 {% if pagina_atual <= 1 %}disabled{% endif %}" href="{{ url_for('pagina_importacao', pagina=pagina_atual-1) }}">Voltar</a>
-                                <div class="d-flex align-items-center gap-2">
-                                    <label for="seletorPagina" class="form-label mb-0">Página</label>
-                                    <select id="seletorPagina" class="form-select form-select-sm" style="width: auto;">
-                                        {% for numero in range(1, total_paginas + 1) %}
-                                            <option value="{{ numero }}" {% if numero == pagina_atual %}selected{% endif %}>{{ numero }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <span class="text-muted small">de {{ total_paginas }}</span>
-                                </div>
-                                <a class="btn btn-outline-secondary btn-sm px-3 {% if pagina_atual >= total_paginas %}disabled{% endif %}" href="{{ url_for('pagina_importacao', pagina=pagina_atual+1) }}">Avançar</a>
-                            </div>
-                        {% endif %}
-                    </div>
+
                 </div>
             </div>
         </div>
     </div>
 </div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('formImportacao');
@@ -88,14 +46,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const barra = document.getElementById('barraProgresso');
     const botao = document.getElementById('btnImportar');
     let intervalo;
-
-    const seletorPagina = document.getElementById('seletorPagina');
-    if (seletorPagina) {
-        seletorPagina.addEventListener('change', function() {
-            const pagina = this.value;
-            window.location.href = `${"{{ url_for('pagina_importacao') }}"}?pagina=${pagina}`;
-        });
-    }
 
     form.addEventListener('submit', function() {
         botao.disabled = true;
