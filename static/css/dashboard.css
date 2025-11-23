@@ -1,3 +1,6 @@
+/* =======================
+   ESTILO DOS CARDS
+   ======================= */
 .dashboard-card {
     border-radius: 16px;
     border: none;
@@ -24,6 +27,9 @@
     color: var(--verde-escuro);
 }
 
+/* =======================
+   MAPA
+   ======================= */
 .minimapa {
     width: 100%;
     height: 320px;
@@ -32,37 +38,121 @@
     background: #fff;
 }
 
-.calendario {
+/* =======================
+   CALENDÁRIO COMPACTO
+   ======================= */
+
+.mini-compact-calendar {
     width: 100%;
-    height: 320px;
-    border-radius: 10px;
-    background: #fff;
+    height: 295px;
+    box-sizing: border-box;
     padding: 8px;
+    background: #ffffff;
+    border-radius: 10px;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    gap: 6px;
+    overflow: hidden;
 }
 
-/* ---------- Calendário dentro do bloco ---------- */
-.calendario-wrapper {
+/* Cabeçalho */
+.mini-compact-calendar .mc-header {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    padding: 0 6px;
+    font-weight:600;
+    font-size:0.85rem;
+    color: var(--verde-escuro);
+}
+
+/* Grid dos dias */
+.mini-compact-calendar .mc-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    grid-auto-rows: 38px;
+    gap: 2px;
     width: 100%;
-    height: 380px;      /* Altura fixa para impedir o estouro */
-    overflow: hidden;    /* Evita que o calendário ultrapasse */
-    border-radius: 12px;
+    height: calc(100% - 34px);
+    box-sizing: border-box;
 }
 
-.calendario {
-    width: 100%;
-    height: 100%;
+/* Cabeçalho semanal */
+.mini-compact-calendar .mc-weekday {
+    font-size: 0.60rem;
+    text-align: center;
+    line-height: 1;
+    padding-top: 4px;
+    color: #6b7280;
 }
 
-/* Ajuste fino do FullCalendar */
-.fc {
-    font-size: 0.85rem !important;
+/* Células dos dias */
+.mini-compact-calendar .mc-day {
+    position: relative;
+    box-sizing: border-box;
+    border-radius: 6px;
+    padding: 3px;
+    font-size: 0.65rem;
+    color: #111827;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
-.fc-daygrid-day-number {
-    font-size: 0.8rem !important;
+/* Número do dia */
+.mini-compact-calendar .mc-day .mc-num {
+    font-size: 0.65rem;
+    line-height: 1;
 }
 
-.fc-daygrid-event {
-    font-size: 0.75rem !important;
-    padding: 1px 3px !important;
+/* Células vazias */
+.mc-day.empty {
+    background: transparent !important;
+    pointer-events: none;
+}
+
+/* Marcador de evento */
+.mini-compact-calendar .mc-day .mc-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--verde-medio);
+    position: absolute;
+    right: 4px;
+    top: 4px;
+}
+
+/* =======================
+   DIA ATUAL (VERSÃO FINAL)
+   ======================= */
+
+.mc-day.today {
+    background: rgba(165, 214, 167, 0.377);
+    border: 2px solid #1b5e20;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Número maior sem aumentar a célula */
+.mc-day.today .mc-num {
+    transform: scale(1.5);      /* aumenta visualmente */
+    transform-origin: center;
+    font-weight: 900;
+    color: #0b3d0b;
+    line-height: 1;
+}
+
+/* =======================
+   RESPONSIVO
+   ======================= */
+@media (max-width: 420px) {
+    .mini-compact-calendar .mc-grid {
+        grid-auto-rows: 34px;
+    }
+    .mini-compact-calendar {
+        height: 280px;
+    }
 }
