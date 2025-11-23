@@ -1,10 +1,12 @@
-﻿from flask import Flask, render_template, request, redirect, url_for, session, abort
-import re
+﻿from flask import Flask, render_template, request, redirect, url_for, session, abort, jsonify
 from banco_dados import ConfiguracaoBanco, BancoDados
 from servico_autenticacao import ServicoAutenticacao
 from form_importador import ServicoImportacao
 from form_cadastro_veiculos import ServicoVeiculo
 from form_cadastro_usuarios import ServicoUsuario
+from form_pedidos_importados import ServicoPedidosImportados
+from jinja2 import TemplateNotFound
+import re
 
 app = Flask(__name__)
 app.secret_key = 'fastrout'  # Troque para uma chave mais segura em producao
@@ -17,11 +19,18 @@ DB_PORT = "5433"
 DB_NAME = "FastRoute"
 
 config_banco = ConfiguracaoBanco(DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT)
-banco_dados = BancoDados(config_banco)
+banco_dados = None
+try:
+    banco_dados = BancoDados(config_banco)
+except Exception:
+    # Falha ao conectar: continuar com None (modo local/fallback nos serviços)
+    banco_dados = None
+
 servico_autenticacao = ServicoAutenticacao(banco_dados)
 servico_importacao = ServicoImportacao(banco_dados)
 servico_veiculo = ServicoVeiculo(banco_dados)
 servico_usuario = ServicoUsuario(banco_dados)
+servico_pedidos = ServicoPedidosImportados(banco_dados)
 
 
 # Decorator para exigir login
@@ -39,8 +48,10 @@ def admin_obrigatorio(func):
     def wrapper(*args, **kwargs):
         if 'usuario_id' not in session:
             return redirect(url_for('login_page'))
-        if session.get('usuario_cargo') != '1':
-            return abort(403)
+        cargo = session.get('usuario_cargo')
+        # aceitar '1' ou 1
+        if str(cargo) != '1':
+            abort(403)
         return func(*args, **kwargs)
 
     wrapper.__name__ = func.__name__
@@ -55,14 +66,15 @@ def login_page():
 
 @app.route('/login', methods=['POST'])
 def realizar_login():
-    nome = request.form['usuario']
-    senha = request.form['senha']
+    nome = request.form.get('usuario', '').strip()
+    senha = request.form.get('senha', '').strip()
 
     sucesso, usuario, mensagem = servico_autenticacao.autenticar_usuario(nome, senha)
     if sucesso:
-        session['usuario_id'] = usuario["id"]
-        session['usuario_nome'] = usuario["nome"]
-        session['usuario_cargo'] = str(usuario["cargo"])
+        # usuario pode ser dict com id/nome/cargo conforme servico
+        session['usuario_id'] = usuario.get('id') if isinstance(usuario, dict) else usuario
+        session['usuario_nome'] = usuario.get('nome') if isinstance(usuario, dict) else nome
+        session['usuario_cargo'] = usuario.get('cargo') if isinstance(usuario, dict) and usuario.get('cargo') is not None else '0'
         return redirect(url_for('home'))
     return render_template('login.html', erro=mensagem)
 
@@ -89,16 +101,16 @@ def home():
 def pagina_importacao():
     clientes = servico_importacao.buscar_clientes()
     pagina = request.args.get('pagina', default=1, type=int)
-    paginacao_pedidos = servico_importacao.listar_pedidos(pagina)
+    paginacao_pedidos = servico_importacao.listar_pedidos(pagina) if hasattr(servico_importacao, 'listar_pedidos') else {"pedidos": [], "pagina": 1, "total_paginas": 1, "total_registros": 0}
     return render_template(
         'importar.html',
         usuario=session.get('usuario_nome'),
         cargo=session.get('usuario_cargo'),
         clientes=clientes,
-        pedidos=paginacao_pedidos["pedidos"],
-        pagina_atual=paginacao_pedidos["pagina"],
-        total_paginas=paginacao_pedidos["total_paginas"],
-        total_registros=paginacao_pedidos["total_registros"],
+        pedidos=paginacao_pedidos.get("pedidos"),
+        pagina_atual=paginacao_pedidos.get("pagina"),
+        total_paginas=paginacao_pedidos.get("total_paginas"),
+        total_registros=paginacao_pedidos.get("total_registros"),
         sucesso=request.args.get('sucesso'),
         erro=request.args.get('erro'),
     )
@@ -110,7 +122,6 @@ def processar_importacao():
     arquivo = request.files.get('arquivo')
     if not arquivo:
         return redirect(url_for('pagina_importacao', erro="Nenhum arquivo selecionado."))
-
     sucesso, mensagem = servico_importacao.importar_dados_csv(arquivo)
     if sucesso:
         return redirect(url_for('pagina_importacao', sucesso=mensagem))
@@ -143,25 +154,20 @@ def cadastrar_veiculo():
     placa_input = dados_form.get('placa', '').strip().upper()
 
     if not placa_regex.match(placa_input):
-        return redirect(
-            url_for(
-                'pagina_veiculos',
-                erro="Formato de placa invalido. Use o padrao brasileiro de 7 caracteres (Ex: ABC1234 ou ABC1D23).",
-            )
-        )
+        return redirect(url_for('pagina_veiculos', erro="Formato de placa invalido."))
 
     try:
-        dados_veiculo = {
+        dados = {
             'placa': placa_input,
-            'marca': dados_form['marca'],
-            'modelo': dados_form['modelo'],
-            'tipo_carga': int(dados_form['tipo_carga']),
-            'limite_peso': float(dados_form['limite_peso']),
+            'marca': dados_form.get('marca', '').strip(),
+            'modelo': dados_form.get('modelo', '').strip(),
+            'tipo_carga': int(dados_form.get('tipo_carga', 0)),
+            'limite_peso': float(dados_form.get('limite_peso', 0.0)),
         }
-    except (ValueError, TypeError):
-        return redirect(url_for('pagina_veiculos', erro="Erro de formato: verifique os campos."))
+    except Exception:
+        return redirect(url_for('pagina_veiculos', erro="Erro nos dados do veículo."))
 
-    sucesso, mensagem = servico_veiculo.cadastrar_veiculo(dados_veiculo)
+    sucesso, mensagem = servico_veiculo.cadastrar_veiculo(dados)
     if sucesso:
         return redirect(url_for('pagina_veiculos', mensagem_sucesso=mensagem))
     return redirect(url_for('pagina_veiculos', erro=mensagem))
@@ -172,17 +178,17 @@ def cadastrar_veiculo():
 def atualizar_veiculo():
     dados_form = request.form
     try:
-        dados_veiculo = {
-            'placa': dados_form['placa_original'],
-            'marca': dados_form['marca'],
-            'modelo': dados_form['modelo'],
-            'tipo_carga': int(dados_form['tipo_carga']),
-            'limite_peso': float(dados_form['limite_peso']),
+        dados = {
+            'placa': dados_form.get('placa_original', '').strip().upper(),
+            'marca': dados_form.get('marca', '').strip(),
+            'modelo': dados_form.get('modelo', '').strip(),
+            'tipo_carga': int(dados_form.get('tipo_carga', 0)),
+            'limite_peso': float(dados_form.get('limite_peso', 0.0)),
         }
-    except (ValueError, TypeError):
-        return redirect(url_for('pagina_veiculos', erro="Erro de formato: verifique os campos."))
+    except Exception:
+        return redirect(url_for('pagina_veiculos', erro="Erro nos dados do veículo."))
 
-    sucesso, mensagem = servico_veiculo.atualizar_veiculo(dados_veiculo)
+    sucesso, mensagem = servico_veiculo.atualizar_veiculo(dados)
     if sucesso:
         return redirect(url_for('pagina_veiculos', mensagem_sucesso=mensagem))
     return redirect(url_for('pagina_veiculos', erro=mensagem))
@@ -204,15 +210,7 @@ def pagina_usuarios():
     usuarios = servico_usuario.listar_usuarios()
     mensagem_sucesso = request.args.get('mensagem_sucesso')
     erro = request.args.get('erro')
-
-    return render_template(
-        'cadastro_usuario.html',
-        usuario=session.get('usuario_nome'),
-        cargo=session.get('usuario_cargo'),
-        usuarios=usuarios,
-        mensagem_sucesso=mensagem_sucesso,
-        erro=erro,
-    )
+    return render_template('cadastro_usuario.html', usuario=session.get('usuario_nome'), usuarios=usuarios, mensagem_sucesso=mensagem_sucesso, erro=erro)
 
 
 @app.route('/cadastrar_usuario', methods=['POST'])
@@ -220,15 +218,15 @@ def pagina_usuarios():
 def cadastrar_usuario():
     dados_form = request.form
     try:
-        dados_usuario = {
-            'nome': dados_form['nome'].strip(),
-            'senha': dados_form['senha'],
-            'cargo': dados_form['cargo'],
+        dados = {
+            'nome': dados_form.get('nome', '').strip(),
+            'senha': dados_form.get('senha', ''),
+            'cargo': int(dados_form.get('cargo', 0)),
         }
-    except (ValueError, TypeError, KeyError):
-        return redirect(url_for('pagina_usuarios', erro="Erro de formato: verifique os campos."))
+    except Exception:
+        return redirect(url_for('pagina_usuarios', erro="Erro nos dados do usuário."))
 
-    sucesso, mensagem = servico_usuario.cadastrar_usuario(dados_usuario)
+    sucesso, mensagem = servico_usuario.cadastrar_usuario(dados)
     if sucesso:
         return redirect(url_for('pagina_usuarios', mensagem_sucesso=mensagem))
     return redirect(url_for('pagina_usuarios', erro=mensagem))
@@ -239,16 +237,16 @@ def cadastrar_usuario():
 def atualizar_usuario():
     dados_form = request.form
     try:
-        dados_usuario = {
-            'id': int(dados_form['usuario_id']),
-            'nome': dados_form['nome'].strip(),
-            'senha': dados_form['senha'],
-            'cargo': dados_form['cargo'],
+        dados = {
+            'id': int(dados_form.get('usuario_id', 0)),
+            'nome': dados_form.get('nome', '').strip(),
+            'senha': dados_form.get('senha', ''),
+            'cargo': int(dados_form.get('cargo', 0)),
         }
-    except (ValueError, TypeError, KeyError):
-        return redirect(url_for('pagina_usuarios', erro="Erro de formato: verifique os campos."))
+    except Exception:
+        return redirect(url_for('pagina_usuarios', erro="Erro nos dados do usuário."))
 
-    sucesso, mensagem = servico_usuario.atualizar_usuario(dados_usuario)
+    sucesso, mensagem = servico_usuario.atualizar_usuario(dados)
     if sucesso:
         return redirect(url_for('pagina_usuarios', mensagem_sucesso=mensagem))
     return redirect(url_for('pagina_usuarios', erro=mensagem))
@@ -262,48 +260,72 @@ def excluir_usuario(usuario_id):
         return redirect(url_for('pagina_usuarios', mensagem_sucesso=mensagem))
     return redirect(url_for('pagina_usuarios', erro=mensagem))
 
+
 #Rotas de Pedidos
-
-# -------------------------------------------------------------------------
-# ROTAS QUE ESTÃO SENDO CHAMADAS NO DASHBOARD
-# -------------------------------------------------------------------------
-
 @app.route('/pedidos_importados')
 @login_obrigatorio
 def pedidos_importados():
-    """Página onde lista pedidos importados (placeholder)."""
-    pedidos = servico_importacao.listar_pedidos(1)["pedidos"]
-    return render_template(
-        'pedidos_importados.html',
-        pedidos=pedidos,
-        usuario=session.get('usuario_nome'),
-        cargo=session.get('usuario_cargo')
-    )
+    pagina = request.args.get('pagina', default=1, type=int)
+    filtros = {}
+    cliente_id = request.args.get('cliente_id')
+    status = request.args.get('status')
+    data_inicio = request.args.get('data_inicio')
+    data_fim = request.args.get('data_fim')
+    if cliente_id:
+        filtros['cliente_id'] = cliente_id
+    if status:
+        filtros['status'] = status
+    if data_inicio:
+        filtros['data_inicio'] = data_inicio
+    if data_fim:
+        filtros['data_fim'] = data_fim
+
+    pag = servico_pedidos.listar_pedidos(pagina, filtros)
+    clientes = servico_pedidos.buscar_clientes()
+    try:
+        return render_template('pedidos_importados.html',
+                               usuario=session.get('usuario_nome'),
+                               cargo=session.get('usuario_cargo'),
+                               pedidos=pag.get('pedidos'),
+                               pagina=pag.get('pagina'),
+                               total_paginas=pag.get('total_paginas'),
+                               total_registros=pag.get('total_registros'),
+                               clientes=clientes)
+    except TemplateNotFound:
+        # fallback para exibir no home caso o template não exista
+        return render_template('home.html',
+                               usuario=session.get('usuario_nome'),
+                               pedidos=pag.get('pedidos'),
+                               clientes=clientes)
 
 
 @app.route('/relatorios')
 @login_obrigatorio
 def relatorios():
-    """Página de relatórios (placeholder)."""
-    return render_template(
-        'relatorios.html',
-        usuario=session.get('usuario_nome'),
-        cargo=session.get('usuario_cargo')
-    )
+    # gerar relatório simples por filtros (reutiliza listar_pedidos)
+    pagina = request.args.get('pagina', default=1, type=int)
+    filtros = {}
+    cliente_id = request.args.get('cliente_id')
+    if cliente_id:
+        filtros['cliente_id'] = cliente_id
+    pag = servico_pedidos.listar_pedidos(pagina, filtros)
+    try:
+        return render_template('relatorios.html', usuario=session.get('usuario_nome'), pedidos=pag.get('pedidos'), pagina=pag.get('pagina'), total_paginas=pag.get('total_paginas'))
+    except TemplateNotFound:
+        return jsonify({"pedidos": pag.get('pedidos'), "pagina": pag.get('pagina'), "total_paginas": pag.get('total_paginas')})
 
 
 @app.route('/entregas_pendentes')
 @login_obrigatorio
 def entregas_pendentes():
-    """Página de entregas pendentes (placeholder)."""
-    pedidos_pendentes = servico_importacao.listar_pedidos_pendentes() if hasattr(servico_importacao, "listar_pedidos_pendentes") else []
-    
-    return render_template(
-        'entregas_pendentes.html',
-        pedidos=pedidos_pendentes,
-        usuario=session.get('usuario_nome'),
-        cargo=session.get('usuario_cargo')
-    )
+    pagina = request.args.get('pagina', default=1, type=int)
+    filtros = {'status': 'PENDENTE'}
+    pag = servico_pedidos.listar_pedidos(pagina, filtros)
+    try:
+        return render_template('entregas_pendentes.html', usuario=session.get('usuario_nome'), pedidos=pag.get('pedidos'), pagina=pag.get('pagina'), total_paginas=pag.get('total_paginas'))
+    except TemplateNotFound:
+        return jsonify({"pedidos": pag.get('pedidos'), "pagina": pag.get('pagina'), "total_paginas": pag.get('total_paginas')})
+
 
 if __name__ == '__main__':
     app.run(debug=True)
