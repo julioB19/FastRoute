@@ -11,9 +11,9 @@ app.secret_key = 'fastrout'  # Troque para uma chave mais segura em producao
 
 # Configuracoes do banco de dados (PostgreSQL)
 DB_USER = "postgres"
-DB_PASSWORD = "barratto123"
-DB_HOST = "127.0.0.1"
-DB_PORT = "3380"
+DB_PASSWORD = "1234"
+DB_HOST = "localhost"
+DB_PORT = "5433"
 DB_NAME = "FastRoute"
 
 config_banco = ConfiguracaoBanco(DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT)
@@ -262,6 +262,48 @@ def excluir_usuario(usuario_id):
         return redirect(url_for('pagina_usuarios', mensagem_sucesso=mensagem))
     return redirect(url_for('pagina_usuarios', erro=mensagem))
 
+#Rotas de Pedidos
+
+# -------------------------------------------------------------------------
+# ROTAS QUE ESTÃO SENDO CHAMADAS NO DASHBOARD
+# -------------------------------------------------------------------------
+
+@app.route('/pedidos_importados')
+@login_obrigatorio
+def pedidos_importados():
+    """Página onde lista pedidos importados (placeholder)."""
+    pedidos = servico_importacao.listar_pedidos(1)["pedidos"]
+    return render_template(
+        'pedidos_importados.html',
+        pedidos=pedidos,
+        usuario=session.get('usuario_nome'),
+        cargo=session.get('usuario_cargo')
+    )
+
+
+@app.route('/relatorios')
+@login_obrigatorio
+def relatorios():
+    """Página de relatórios (placeholder)."""
+    return render_template(
+        'relatorios.html',
+        usuario=session.get('usuario_nome'),
+        cargo=session.get('usuario_cargo')
+    )
+
+
+@app.route('/entregas_pendentes')
+@login_obrigatorio
+def entregas_pendentes():
+    """Página de entregas pendentes (placeholder)."""
+    pedidos_pendentes = servico_importacao.listar_pedidos_pendentes() if hasattr(servico_importacao, "listar_pedidos_pendentes") else []
+    
+    return render_template(
+        'entregas_pendentes.html',
+        pedidos=pedidos_pendentes,
+        usuario=session.get('usuario_nome'),
+        cargo=session.get('usuario_cargo')
+    )
 
 if __name__ == '__main__':
     app.run(debug=True)
