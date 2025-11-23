@@ -223,7 +223,7 @@
     <div id="sidebarContainer" class="sidebar-container">
         
         <div class="sidebar-header">
-             <button id="toggleSidebar" class="btn btn-dark p-2">
+            <button id="toggleSidebar" class="btn btn-dark p-2">
                 <i class="bi bi-list"></i>
             </button>
             <h4 class="text-white">FastRoute
@@ -235,12 +235,17 @@
             <ul class="nav nav-pills flex-column mb-auto">
                 <li class="nav-item">
                     <a href="{{ url_for('home') }}" class="nav-link {% if request.endpoint == 'home' %}active{% endif %}">
-                        <i class="bi bi-box-seam"></i> <span>Entregas</span>
+                        <i class="bi bi-house"></i> <span>Dashboard</span>
                     </a>
                 </li>
                 <li class="nav-item">
                     <a href="{{ url_for('pagina_importacao') }}" class="nav-link {% if request.endpoint == 'pagina_importacao' %}active{% endif %}">
                         <i class="bi bi-upload"></i> <span>Importar Dados</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{{ url_for('pedidos_importados') }}" class="nav-link {% if request.endpoint == 'pedidos_importados' %}active{% endif %}">
+                        <i class="bi bi-file-earmark-spreadsheet"></i> <span>Notas Importadas</span>
                     </a>
                 </li>
                 <li class="nav-item">

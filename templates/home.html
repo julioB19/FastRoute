@@ -1,16 +1,109 @@
 ﻿{% extends "htmlBase.html" %}
-{% block titulo %}FastRoute{% endblock %}
+{% block titulo %}FastRoute - Dashboard{% endblock %}
+
 {% block conteudo %}
+<link href="{{ url_for('static', filename='css/dashboard.css') }}" rel="stylesheet">
+
 <div class="container-fluid mt-4 px-3 px-md-4">
-    <div class="row justify-content-center">
-        <div class="col-12 col-xl-11 col-xxl-10">
-            <div class="card shadow-lg border-0 rounded-4">
-                <div class="card-body p-4">
-                    <h3 class="mb-3" style="color: var(--verde-escuro);">Bem-vindo(a)!</h3>
-                    <p class="mb-0" style="color: #4a4a4a;">Selecione uma opção no menu lateral para começar.</p>
+
+    <div class="row g-4">
+
+        <!-- BLOCO 1 – Pedidos Importados -->
+        <div class="col-12 col-md-6 col-lg-6">
+            <div class="card dashboard-card h-100 position-relative">
+                
+                <div class="position-absolute top-0 end-0 p-3">
+                    <a href="{{ url_for('pedidos_importados') }}" title="Ir para pedidos importados">
+                        <i class="bi bi-arrow-right-circle-fill seta-bloco"></i>
+                    </a>
+                </div>
+
+                <div class="card-body **d-flex flex-column align-items-center justify-content-center**">
+                    
+                    <h5 class="titulo-bloco">Pedidos Importados</h5>
+                    <p class="valor-bloco mb-1">{{ total_pedidos }}</p>
+                    <small class="text-muted">Total de pedidos carregados no sistema</small>
+
+                    <a href="{{ url_for('pedidos_importados') }}" class="stretched-link"></a>
                 </div>
             </div>
         </div>
+
+        <!-- BLOCO 2 – Pedidos com Divergência -->
+        <div class="col-12 col-md-6 col-lg-6">
+            <div class="card dashboard-card h-100 position-relative">
+                <div class="card-body">
+                    <h5 class="titulo-bloco text-danger">Pedidos com Divergência</h5>
+                    <p class="valor-bloco mb-1 text-danger">{{ pedidos_divergentes }}</p>
+                    <small class="text-muted">Pedidos sem geolocalização (dados incompletos)</small>
+
+                    <a href="{{ url_for('pagina_importacao') }}" class="stretched-link"></a>
+
+                    <div class="position-absolute bottom-3 end-3 p-3">
+                        <a href="{{ url_for('pedidos_importados') }}?filtro=incompletos" title="Ir para pedidos incompletos">
+                            <i class="bi bi-arrow-right-circle-fill seta-bloco text-danger"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
+
+    <div class="row g-4 mt-1">
+
+        <!-- BLOCO 3 – Entregas no Último Mês + Calendário -->
+        <div class="col-12 col-lg-6">
+            <div class="card dashboard-card h-100 position-relative">
+                <div class="card-body">
+                    <h5 class="titulo-bloco">Entregas no Último Mês</h5>
+                    <p class="valor-bloco mb-1">{{ entregas_ultimo_mes }}</p>
+                    <small class="text-muted">Dias com entregas marcados no calendário</small>
+
+                    <div id="calendario" class="mt-3 calendario"></div>
+
+                    <a href="{{ url_for('relatorios') }}" class="stretched-link"></a>
+
+                    <div class="position-absolute bottom-3 end-3 p-3">
+                        <a href="{{ url_for('relatorios') }}" title="Ir para relatórios">
+                            <i class="bi bi-arrow-right-circle-fill seta-bloco"></i>
+                        </a>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- BLOCO 4 – Mini Mapa -->
+        <div class="col-12 col-lg-6">
+            <div class="card dashboard-card h-100 position-relative">
+                <div class="card-body">
+                    <h5 class="titulo-bloco">Mapa de Entregas Pendentes</h5>
+                    <small class="text-muted">Pedidos importados ainda não entregues</small>
+
+                    <div id="miniMapa" class="mt-3 minimapa"></div>
+
+                    <a href="{{ url_for('entregas_pendentes') }}" class="stretched-link"></a>
+
+                    <div class="position-absolute bottom-3 end-3 p-3">
+                        <a href="{{ url_for('entregas_pendentes') }}" title="Ir para entregas pendentes">
+                            <i class="bi bi-arrow-right-circle-fill seta-bloco"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
 </div>
+
+<!-- Dependências locais (FullCalendar + Leaflet) -->
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script src="{{ url_for('static', filename='js/home_dashboard.js') }}"></script>
 {% endblock %}

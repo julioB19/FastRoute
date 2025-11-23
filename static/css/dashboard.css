@@ -1,0 +1,68 @@
+.dashboard-card {
+    border-radius: 16px;
+    border: none;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+    position: relative;
+    background: linear-gradient(180deg, #f9fafb, #f3f4f6);
+}
+
+.titulo-bloco {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--verde-escuro);
+}
+
+.valor-bloco {
+    font-size: 2.6rem;
+    font-weight: 700;
+    margin: 0;
+    color: #263238;
+}
+
+.seta-bloco {
+    font-size: 1.6rem;
+    color: var(--verde-escuro);
+}
+
+.minimapa {
+    width: 100%;
+    height: 320px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #fff;
+}
+
+.calendario {
+    width: 100%;
+    height: 320px;
+    border-radius: 10px;
+    background: #fff;
+    padding: 8px;
+}
+
+/* ---------- Calendário dentro do bloco ---------- */
+.calendario-wrapper {
+    width: 100%;
+    height: 380px;      /* Altura fixa para impedir o estouro */
+    overflow: hidden;    /* Evita que o calendário ultrapasse */
+    border-radius: 12px;
+}
+
+.calendario {
+    width: 100%;
+    height: 100%;
+}
+
+/* Ajuste fino do FullCalendar */
+.fc {
+    font-size: 0.85rem !important;
+}
+
+.fc-daygrid-day-number {
+    font-size: 0.8rem !important;
+}
+
+.fc-daygrid-event {
+    font-size: 0.75rem !important;
+    padding: 1px 3px !important;
+}

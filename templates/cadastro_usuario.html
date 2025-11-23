@@ -79,8 +79,8 @@
                                         <tr data-id="{{ usuario.id }}" data-nome="{{ usuario.nome }}" data-cargo="{{ usuario.cargo }}">
                                             <td>{{ usuario.nome }}</td>
                                             <td>
-                                                {% if usuario.cargo == 1 %} Administrador
-                                                {% elif usuario.cargo == 2 %} Comum
+                                                {% if usuario.cargo == '1' %} Administrador
+                                                {% elif usuario.cargo == '2' %} Comum
                                                 {% else %} ---
                                                 {% endif %}
                                             </td>

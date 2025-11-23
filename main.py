@@ -1,4 +1,4 @@
-﻿from flask import Flask, render_template, request, redirect, url_for, session
+﻿from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 import re
 from banco_dados import ConfiguracaoBanco, BancoDados
 from servico_autenticacao import ServicoAutenticacao
@@ -7,13 +7,13 @@ from form_cadastro_veiculos import ServicoVeiculo
 from form_cadastro_usuarios import ServicoUsuario
 
 app = Flask(__name__)
-app.secret_key = 'fastrout'  # Troque para uma chave mais segura em producao
+app.secret_key = 'fastrout'  # Troque para uma chave mais segura em produção
 
-# Configuracoes do banco de dados (PostgreSQL)
+# Configurações do banco PostgreSQL
 DB_USER = "postgres"
-DB_PASSWORD = "barratto123"
-DB_HOST = "127.0.0.1"
-DB_PORT = "3380"
+DB_PASSWORD = "1234"
+DB_HOST = "localhost"
+DB_PORT = "5433"
 DB_NAME = "FastRoute"
 
 config_banco = ConfiguracaoBanco(DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT)
@@ -24,7 +24,7 @@ servico_veiculo = ServicoVeiculo(banco_dados)
 servico_usuario = ServicoUsuario(banco_dados)
 
 
-# Decorator para exigir login
+# Decorator para login obrigatório
 def login_obrigatorio(func):
     def wrapper(*args, **kwargs):
         if 'usuario_id' not in session:
@@ -35,7 +35,9 @@ def login_obrigatorio(func):
     return wrapper
 
 
-# Rotas de autenticacao
+# ----------------------------
+# LOGIN
+# ----------------------------
 @app.route('/')
 def login_page():
     return render_template('login.html')
@@ -60,13 +62,47 @@ def realizar_logout():
     return redirect(url_for('login_page'))
 
 
+# ---------------------------------------------------
+#   HOME / DASHBOARD
+# ---------------------------------------------------
 @app.route('/home')
 @login_obrigatorio
 def home():
-    return render_template('home.html', usuario=session.get('usuario_nome'))
+    total_pedidos = servico_importacao.contar_pedidos()
+    pedidos_divergentes = servico_importacao.contar_pedidos_divergentes()
+    entregas_ultimo_mes = servico_importacao.contar_entregas_ultimo_mes()
+
+    return render_template(
+        'home.html',
+        usuario=session.get('usuario_nome'),
+        total_pedidos=total_pedidos,
+        pedidos_divergentes=pedidos_divergentes,
+        entregas_ultimo_mes=entregas_ultimo_mes
+    )
 
 
-# Rotas de importacao
+# ---------------------------------------------------
+#   API – CALENDÁRIO (FullCalendar)
+# ---------------------------------------------------
+@app.route('/entregas-datas')
+@login_obrigatorio
+def entregas_datas():
+    datas = servico_importacao.listar_datas_entregas()
+    eventos = [{"title": "Entrega", "start": d.isoformat()} for d in datas]
+    return jsonify(eventos)
+
+
+@app.route('/entregas-pendentes')
+@login_obrigatorio
+def entregas_pendentes():
+    pontos = servico_importacao.listar_entregas_pendentes()
+    return jsonify(pontos)
+
+
+
+# ---------------------------------------------------
+#   IMPORTAÇÃO DE PEDIDOS
+# ---------------------------------------------------
 @app.route('/importar', methods=['GET'])
 @login_obrigatorio
 def pagina_importacao():
@@ -87,20 +123,19 @@ def processar_importacao():
     return render_template('importar.html', erro=mensagem, usuario=session.get('usuario_nome'))
 
 
-# Rotas de veiculos
-@app.route('/veiculos', methods=['GET'])
+# ---------------------------------------------------
+#   VEÍCULOS
+# ---------------------------------------------------
+@app.route('/veiculos')
 @login_obrigatorio
 def pagina_veiculos():
     veiculos = servico_veiculo.listar_veiculos()
-    mensagem_sucesso = request.args.get('mensagem_sucesso')
-    erro = request.args.get('erro')
-
     return render_template(
         'cadastro_veiculo.html',
         usuario=session.get('usuario_nome'),
         veiculos=veiculos,
-        mensagem_sucesso=mensagem_sucesso,
-        erro=erro,
+        mensagem_sucesso=request.args.get('mensagem_sucesso'),
+        erro=request.args.get('erro')
     )
 
 
@@ -109,26 +144,21 @@ def pagina_veiculos():
 def cadastrar_veiculo():
     placa_regex = re.compile(r'^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$', re.IGNORECASE)
     dados_form = request.form
-    placa_input = dados_form.get('placa', '').strip().upper()
+    placa = dados_form.get('placa', '').strip().upper()
 
-    if not placa_regex.match(placa_input):
-        return redirect(
-            url_for(
-                'pagina_veiculos',
-                erro="Formato de placa invalido. Use o padrao brasileiro de 7 caracteres (Ex: ABC1234 ou ABC1D23).",
-            )
-        )
+    if not placa_regex.match(placa):
+        return redirect(url_for('pagina_veiculos', erro="Formato de placa inválido."))
 
     try:
         dados_veiculo = {
-            'placa': placa_input,
+            'placa': placa,
             'marca': dados_form['marca'],
             'modelo': dados_form['modelo'],
             'tipo_carga': int(dados_form['tipo_carga']),
             'limite_peso': float(dados_form['limite_peso']),
         }
-    except (ValueError, TypeError):
-        return redirect(url_for('pagina_veiculos', erro="Erro de formato: verifique os campos."))
+    except:
+        return redirect(url_for('pagina_veiculos', erro="Erro nos dados."))
 
     sucesso, mensagem = servico_veiculo.cadastrar_veiculo(dados_veiculo)
     if sucesso:
@@ -148,8 +178,8 @@ def atualizar_veiculo():
             'tipo_carga': int(dados_form['tipo_carga']),
             'limite_peso': float(dados_form['limite_peso']),
         }
-    except (ValueError, TypeError):
-        return redirect(url_for('pagina_veiculos', erro="Erro de formato: verifique os campos."))
+    except:
+        return redirect(url_for('pagina_veiculos', erro="Erro nos dados."))
 
     sucesso, mensagem = servico_veiculo.atualizar_veiculo(dados_veiculo)
     if sucesso:
@@ -166,20 +196,19 @@ def excluir_veiculo(placa):
     return redirect(url_for('pagina_veiculos', erro=mensagem))
 
 
-# Rotas de usuarios
-@app.route('/usuarios', methods=['GET'])
+# ---------------------------------------------------
+#   USUÁRIOS
+# ---------------------------------------------------
+@app.route('/usuarios')
 @login_obrigatorio
 def pagina_usuarios():
     usuarios = servico_usuario.listar_usuarios()
-    mensagem_sucesso = request.args.get('mensagem_sucesso')
-    erro = request.args.get('erro')
-
     return render_template(
         'cadastro_usuario.html',
         usuario=session.get('usuario_nome'),
         usuarios=usuarios,
-        mensagem_sucesso=mensagem_sucesso,
-        erro=erro,
+        mensagem_sucesso=request.args.get('mensagem_sucesso'),
+        erro=request.args.get('erro'),
     )
 
 
@@ -193,8 +222,8 @@ def cadastrar_usuario():
             'senha': dados_form['senha'],
             'cargo': int(dados_form['cargo']),
         }
-    except (ValueError, TypeError, KeyError):
-        return redirect(url_for('pagina_usuarios', erro="Erro de formato: verifique os campos."))
+    except:
+        return redirect(url_for('pagina_usuarios', erro="Erro nos dados."))
 
     sucesso, mensagem = servico_usuario.cadastrar_usuario(dados_usuario)
     if sucesso:
@@ -213,8 +242,8 @@ def atualizar_usuario():
             'senha': dados_form['senha'],
             'cargo': int(dados_form['cargo']),
         }
-    except (ValueError, TypeError, KeyError):
-        return redirect(url_for('pagina_usuarios', erro="Erro de formato: verifique os campos."))
+    except:
+        return redirect(url_for('pagina_usuarios', erro="Erro nos dados."))
 
     sucesso, mensagem = servico_usuario.atualizar_usuario(dados_usuario)
     if sucesso:
@@ -230,6 +259,50 @@ def excluir_usuario(usuario_id):
         return redirect(url_for('pagina_usuarios', mensagem_sucesso=mensagem))
     return redirect(url_for('pagina_usuarios', erro=mensagem))
 
+# ROTA: lista de pedidos importados
+@app.route('/pedidos')
+@login_obrigatorio
+def pedidos_importados():
+    filtro = request.args.get('filtro', 'todos')
+    data_prevista = request.args.get('data_prevista', None)
+    # paginação simples (opcional)
+    page = int(request.args.get('page', 1))
+    per_page = 100
+    offset = (page - 1) * per_page
 
+    pedidos = servico_importacao.buscar_pedidos(filtro=filtro, data_prevista=data_prevista, limit=per_page, offset=offset)
+
+    return render_template(
+        'pedidos_importados.html',
+        usuario=session.get('usuario_nome'),
+        pedidos=pedidos,
+        filtro=filtro,
+        data_prevista=data_prevista
+    )
+
+# ROTA: detalhes do pedido
+@app.route('/pedidos/<int:n_nota>')
+@login_obrigatorio
+def detalhar_pedido(n_nota):
+    pedido = servico_importacao.buscar_pedido_por_id(n_nota)
+    if not pedido:
+        return redirect(url_for('pedidos_importados'))
+    return render_template('detalhe_pedido.html', usuario=session.get('usuario_nome'), pedido=pedido)
+
+# ---------------------------------------------------
+#   RELATÓRIOS
+# ---------------------------------------------------
+@app.route('/relatorios')
+@login_obrigatorio
+def relatorios():
+    return render_template(
+        'relatorios.html',
+        usuario=session.get('usuario_nome')
+    )
+
+
+# ---------------------------------------------------
+# EXECUÇÃO
+# ---------------------------------------------------
 if __name__ == '__main__':
     app.run(debug=True)

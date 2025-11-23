@@ -1,0 +1,17 @@
+.table thead th {
+    border-bottom: 1px solid var(--cinza-borda);
+}
+
+.badge {
+    font-weight: 600;
+}
+
+.card .table-responsive {
+    padding: 12px;
+}
+
+@media (max-width: 767px) {
+    .card .table-responsive {
+        padding: 6px;
+    }
+}

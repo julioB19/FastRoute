@@ -1,0 +1,86 @@
+{% extends "htmlBase.html" %}
+{% block titulo %}FastRoute - Pedidos Importados{% endblock %}
+
+{% block conteudo %}
+<link href="{{ url_for('static', filename='css/pedidos_importados.css') }}" rel="stylesheet">
+
+<div class="container-fluid mt-4 px-3 px-md-4">
+    <div class="row">
+        <div class="col-12">
+            <h4 class="mb-3" style="color: var(--verde-escuro);">Pedidos Importados</h4>
+        </div>
+    </div>
+
+    <!-- filtros -->
+    <form method="get" action="{{ url_for('pedidos_importados') }}" class="row g-3 mb-3">
+        <div class="col-md-3">
+            <label class="form-label">Filtro</label>
+            <select class="form-select" name="filtro">
+                <option value="todos" {% if filtro == 'todos' %}selected{% endif %}>Todos</option>
+                <option value="completos" {% if filtro == 'completos' %}selected{% endif %}>Completos</option>
+                <option value="incompletos" {% if filtro == 'incompletos' %}selected{% endif %}>Incompletos</option>
+            </select>
+        </div>
+
+        <div class="col-md-3">
+            <label class="form-label">Data Prevista</label>
+            <input type="date" class="form-control" name="data_prevista" value="{{ data_prevista }}">
+        </div>
+
+        <div class="col-md-3 d-flex align-items-end">
+            <button class="btn btn-cotri">Aplicar</button>
+            <a href="{{ url_for('pedidos_importados') }}" class="btn btn-outline-secondary ms-2">Limpar</a>
+        </div>
+    </form>
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Nota</th>
+                            <th>Cliente</th>
+                            <th>Cidade</th>
+                            <th>Endereço</th>
+                            <th>Data Prevista</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if pedidos %}
+                            {% for p in pedidos %}
+                                <tr>
+                                    <td>{{ p.id }}</td>
+                                    <td>{{ p.cliente }}</td>
+                                    <td>{{ p.cidade }}</td>
+                                    <td>{{ p.endereco }}</td>
+                                    <td>{{ p.data_prevista or '-' }}</td>
+                                    <td>
+                                        {% if p.completo %}
+                                            <span class="badge bg-success">Completo</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">Incompleto</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('detalhar_pedido', n_nota=p.id) }}" class="btn btn-sm btn-outline-primary">Detalhes</a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="7" class="text-center py-4">Nenhum pedido encontrado.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script src="{{ url_for('static', filename='js/pedidos_importados.js') }}"></script>
+{% endblock %}
