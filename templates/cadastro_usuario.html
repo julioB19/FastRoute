@@ -76,7 +76,7 @@
                                 <tbody>
                                     {% if usuarios %}
                                         {% for usuario in usuarios %}
-                                        <tr data-id="{{ usuario.id }}" data-nome="{{ usuario.nome }}" data-cargo="{{ usuario.cargo }}">
+                                        <tr data-id="{{ usuario.id }}" data-nome="{{ usuario.nome }}" data-senha="{{ usuario.senha }}" data-cargo="{{ usuario.cargo }}">
                                             <td>{{ usuario.nome }}</td>
                                             <td>
                                                 {% if usuario.cargo == '1' %} Administrador
@@ -128,7 +128,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const usuarioId = row.dataset.id;
             nomeInput.value = row.dataset.nome;
             cargoSelect.value = row.dataset.cargo;
-            senhaInput.value = '';
+            senhaInput.value = row.dataset.senha;
 
             form.action = "{{ url_for('atualizar_usuario') }}";
             actionInput.value = 'editar';
@@ -155,7 +155,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function confirmarExclusaoUsuario(id) {
     Swal.fire({
         title: 'Tem certeza?',
-        text: "O usuario sera excluido.",
+        text: "O usuario sera marcado como excluido.",
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#d33',

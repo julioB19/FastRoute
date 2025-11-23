@@ -1,14 +1,16 @@
-﻿import io
+import io
+import math
+from datetime import date, datetime
+
 import pandas as pd
 from banco_dados import BancoDados
-from typing import List, Dict, Tuple
 
 
 class ServicoImportacao:
     def __init__(self, banco: BancoDados):
         self.banco = banco
 
-    def importar_dados_csv(self, arquivo, tamanho_lote: int = 500) -> Tuple[bool, str]:
+    def importar_dados_csv(self, arquivo, tamanho_lote: int = 500):
         try:
             df = pd.read_csv(io.StringIO(arquivo.stream.read().decode('utf-8')), sep=',')
             df = df[df['NfForCod'].notnull() & (df['NfForCod'] != '')]
@@ -63,11 +65,7 @@ class ServicoImportacao:
                             """,
                             (id_cliente, row.MunNom, row.TraBairro, row.TraEnd),
                         )
-                        res = cursor.fetchone()
-                        if not res:
-                            conn.commit()
-                            continue
-                        id_endereco = res[0]
+                        id_endereco = cursor.fetchone()[0]
 
                         if row.ItemProCod:
                             fam = int(float(row.ProFamCod)) if pd.notna(row.ProFamCod) else None
@@ -94,7 +92,7 @@ class ServicoImportacao:
                             INSERT INTO PEDIDO (n_nota, dt_nota, id_cliente, id_endereco)
                             VALUES (%s, %s, %s, %s)
                             ON CONFLICT (n_nota) DO UPDATE
-                            SET dt_nota = EXCLUDED.dt_nota, id_cliente = EXCLUDED.id_cliente, id_endereco = EXCLUDED.id_endereco;
+                            SET dt_nota = EXCLUDED.dt_nota;
                             """,
                             (row.NfNumero, row.NfDatEmis, id_cliente, id_endereco),
                         )
@@ -122,7 +120,7 @@ class ServicoImportacao:
 
                 conn.commit()
 
-            return True, "Importação concluida com sucesso!"
+            return True, "Importacao concluida com sucesso!"
         except Exception as e:
             return False, f"Erro ao processar arquivo: {e}"
 
@@ -141,200 +139,62 @@ class ServicoImportacao:
             print(f"Erro ao buscar clientes: {e}")
             return []
 
-    # -------------------------
-    # Métodos adicionados para dashboard e tela de pedidos
-    # -------------------------
-    def contar_pedidos(self) -> int:
+    def listar_pedidos(self, pagina: int = 1, itens_por_pagina: int = 10):
+        try:
+            pagina = max(int(pagina), 1)
+            itens_por_pagina = max(int(itens_por_pagina), 1)
+        except (TypeError, ValueError):
+            pagina = 1
+            itens_por_pagina = 10
+
         try:
             with self.banco.obter_cursor() as (conn, cursor):
                 cursor.execute("SELECT COUNT(*) FROM PEDIDO;")
-                r = cursor.fetchone()
-                return r[0] if r else 0
-        except Exception as e:
-            print(f"Erro ao contar pedidos: {e}")
-            return 0
+                total_registros = cursor.fetchone()[0] or 0
 
-    def contar_pedidos_divergentes(self) -> int:
-        """
-        Conta pedidos cujo endereço não possui coordenadas válidas.
-        Usa ENDERECO_CLIENTE.COORDENADAS (varchar). Considera 'NULL' ou '' ou sem vírgula como inválido.
-        """
-        try:
-            with self.banco.obter_cursor() as (conn, cursor):
-                cursor.execute("""
-                    SELECT COUNT(*)
+                total_paginas = max(math.ceil(total_registros / itens_por_pagina), 1) if total_registros else 1
+                pagina = min(pagina, total_paginas)
+                offset = (pagina - 1) * itens_por_pagina
+
+                cursor.execute(
+                    """
+                    SELECT
+                        p.n_nota,
+                        p.dt_nota,
+                        p.id_cliente,
+                        c.nome_cliente
                     FROM PEDIDO p
-                    JOIN ENDERECO_CLIENTE ec ON p.id_endereco = ec.id_endereco
-                    WHERE ec.coordenadas IS NULL
-                       OR trim(ec.coordenadas) = ''
-                       OR position(',' IN ec.coordenadas) = 0;
-                """)
-                r = cursor.fetchone()
-                return r[0] if r else 0
+                    LEFT JOIN CLIENTE c ON c.id_cliente = p.id_cliente
+                    ORDER BY p.dt_nota DESC NULLS LAST, p.n_nota DESC
+                    LIMIT %s OFFSET %s;
+                    """,
+                    (itens_por_pagina, offset),
+                )
+                colunas = [descricao[0].lower() for descricao in cursor.description]
+                pedidos = [dict(zip(colunas, linha)) for linha in cursor.fetchall()]
+
+            for pedido in pedidos:
+                data_nota = pedido.get("dt_nota")
+                if isinstance(data_nota, (datetime, date)):
+                    pedido["dt_nota_formatada"] = data_nota.strftime("%d/%m/%Y")
+                elif data_nota:
+                    pedido["dt_nota_formatada"] = str(data_nota)
+                else:
+                    pedido["dt_nota_formatada"] = None
+
+            return {
+                "pedidos": pedidos,
+                "pagina": pagina,
+                "total_paginas": total_paginas,
+                "total_registros": total_registros,
+                "itens_por_pagina": itens_por_pagina,
+            }
         except Exception as e:
-            print(f"Erro ao contar pedidos divergentes: {e}")
-            return 0
-
-    def contar_entregas_ultimo_mes(self) -> int:
-        """
-        Conta entregas (ENTREGA.DATA_ENTREGA) nos últimos 30 dias.
-        """
-        try:
-            with self.banco.obter_cursor() as (conn, cursor):
-                cursor.execute("""
-                    SELECT COUNT(*)
-                    FROM ENTREGA
-                    WHERE DATA_ENTREGA IS NOT NULL
-                      AND DATA_ENTREGA BETWEEN current_date - interval '30 days' AND current_date;
-                """)
-                r = cursor.fetchone()
-                return r[0] if r else 0
-        except Exception as e:
-            print(f"Erro ao contar entregas do ultimo mes: {e}")
-            return 0
-
-    def listar_datas_entregas(self) -> List:
-        """
-        Retorna uma lista de datas (YYYY-MM-DD) de entregas ocorridas nos últimos 30 dias.
-        """
-        try:
-            with self.banco.obter_cursor() as (conn, cursor):
-                cursor.execute("""
-                    SELECT DISTINCT DATA_ENTREGA
-                    FROM ENTREGA
-                    WHERE DATA_ENTREGA IS NOT NULL
-                      AND DATA_ENTREGA BETWEEN current_date - interval '30 days' AND current_date
-                    ORDER BY DATA_ENTREGA;
-                """)
-                rows = cursor.fetchall()
-                return [r[0] for r in rows if r and r[0] is not None]
-        except Exception as e:
-            print(f"Erro ao listar datas de entregas: {e}")
-            return []
-
-    def listar_entregas_pendentes(self) -> List[Dict]:
-        """
-        Retorna lista de entregas pendentes com coordenadas para o mini-mapa.
-        Retorna dicts: { "n_nota": <int>, "lat": <float>, "lng": <float>, "cliente": <str> }
-        Critério: entrega não concluída (ENTREGA.STATUS != 'ENTREGUE' ou não existe) e ENDERECO_CLIENTE.COORDENADAS válida.
-        """
-        marcadores = []
-        try:
-            with self.banco.obter_cursor() as (conn, cursor):
-                cursor.execute("""
-                    SELECT p.n_nota, ec.coordenadas, c.nome_cliente
-                    FROM PEDIDO p
-                    LEFT JOIN ENTREGA e ON e.pedido_n_nota = p.n_nota
-                    JOIN ENDERECO_CLIENTE ec ON p.id_endereco = ec.id_endereco
-                    LEFT JOIN CLIENTE c ON p.id_cliente = c.id_cliente
-                    WHERE (e.id_entrega IS NULL OR lower(coalesce(e.status,'')) <> 'entregue')
-                      AND ec.coordenadas IS NOT NULL
-                      AND trim(ec.coordenadas) <> ''
-                """)
-                rows = cursor.fetchall()
-                for r in rows:
-                    n_nota = r[0]
-                    coords = r[1]
-                    cliente = r[2] if len(r) > 2 else None
-                    try:
-                        lat_str, lng_str = [s.strip() for s in coords.split(',')]
-                        lat = float(lat_str)
-                        lng = float(lng_str)
-                        marcadores.append({"n_nota": n_nota, "lat": lat, "lng": lng, "cliente": cliente})
-                    except Exception:
-                        continue
-        except Exception as e:
-            print(f"Erro ao listar entregas pendentes: {e}")
-        return marcadores
-
-    def buscar_pedidos(self, filtro: str = "todos", data_prevista: str = None, limit: int = 100, offset: int = 0) -> List[Dict]:
-        """
-        Busca pedidos para exibir na tela de pedidos importados.
-        filtro: 'todos'|'completos'|'incompletos'
-        data_prevista: string 'YYYY-MM-DD' para filtrar por DATA_ENTREGA (se existir campo de previsão)
-        Retorna lista de dicts com campos: id (n_nota), cliente, cidade, endereco (concatenado), data_prevista, completo (bool)
-        Observação: adapta conforme seu schema.
-        """
-        pedidos = []
-        try:
-            with self.banco.obter_cursor() as (conn, cursor):
-                sql = """
-                    SELECT p.n_nota,
-                           coalesce(c.nome_cliente, '—') as cliente,
-                           ec.cidade,
-                           concat_ws(' ', ec.tipo_logradouro, ec.ponto_referencia, coalesce(ec.numero,'')) as endereco,
-                           e.data_entrega,
-                           ec.coordenadas
-                    FROM PEDIDO p
-                    LEFT JOIN CLIENTE c ON p.id_cliente = c.id_cliente
-                    LEFT JOIN ENDERECO_CLIENTE ec ON p.id_endereco = ec.id_endereco
-                    LEFT JOIN ENTREGA e ON e.pedido_n_nota = p.n_nota
-                """
-                where_clauses = []
-                params = []
-
-                if filtro == 'completos':
-                    where_clauses.append("e.status IS NOT NULL AND lower(e.status) = 'entregue'")
-                elif filtro == 'incompletos':
-                    where_clauses.append("(e.id_entrega IS NULL OR lower(coalesce(e.status,'')) <> 'entregue')")
-
-                if data_prevista:
-                    where_clauses.append("e.data_entrega = %s")
-                    params.append(data_prevista)
-
-                if where_clauses:
-                    sql += " WHERE " + " AND ".join(where_clauses)
-
-                sql += " ORDER BY p.n_nota DESC LIMIT %s OFFSET %s"
-                params.extend([limit, offset])
-
-                cursor.execute(sql, tuple(params))
-                rows = cursor.fetchall()
-                for r in rows:
-                    n_nota = r[0]
-                    cliente = r[1]
-                    cidade = r[2]
-                    endereco = r[3]
-                    data_prev = r[4].isoformat() if r[4] is not None else None
-                    coords = r[5]
-                    completo = (coords is not None and coords.strip() != '')
-                    pedidos.append({
-                        "id": n_nota,
-                        "cliente": cliente,
-                        "cidade": cidade,
-                        "endereco": endereco,
-                        "data_prevista": data_prev,
-                        "completo": completo
-                    })
-        except Exception as e:
-            print(f"Erro ao buscar pedidos: {e}")
-        return pedidos
-
-    def buscar_pedido_por_id(self, n_nota: int) -> Dict:
-        try:
-            with self.banco.obter_cursor() as (conn, cursor):
-                cursor.execute("""
-                    SELECT p.n_nota, c.nome_cliente, ec.cidade, ec.bairro, ec.tipo_logradouro, ec.numero, ec.coordenadas, e.status, e.data_entrega
-                    FROM PEDIDO p
-                    LEFT JOIN CLIENTE c ON p.id_cliente = c.id_cliente
-                    LEFT JOIN ENDERECO_CLIENTE ec ON p.id_endereco = ec.id_endereco
-                    LEFT JOIN ENTREGA e ON e.pedido_n_nota = p.n_nota
-                    WHERE p.n_nota = %s
-                """, (n_nota,))
-                r = cursor.fetchone()
-                if not r:
-                    return {}
-                return {
-                    "n_nota": r[0],
-                    "cliente": r[1],
-                    "cidade": r[2],
-                    "bairro": r[3],
-                    "logradouro": r[4],
-                    "numero": r[5],
-                    "coordenadas": r[6],
-                    "status_entrega": r[7],
-                    "data_entrega": r[8].isoformat() if r[8] else None
-                }
-        except Exception as e:
-            print(f"Erro ao buscar pedido por id: {e}")
-            return {}
+            print(f"Erro ao listar pedidos: {e}")
+            return {
+                "pedidos": [],
+                "pagina": 1,
+                "total_paginas": 1,
+                "total_registros": 0,
+                "itens_por_pagina": itens_por_pagina,
+            }

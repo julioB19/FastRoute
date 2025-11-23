@@ -36,15 +36,16 @@ class ServicoUsuario:
             with self.banco.obter_cursor() as (conn, cursor):
                 cursor.execute(
                     """
-                    SELECT ID_USUARIO, NOME, CARGO
+                    SELECT ID_USUARIO, NOME, SENHA, CARGO
                     FROM USUARIO
+                    WHERE CARGO <> '99'
                     ORDER BY NOME
                     """
                 )
                 registros = cursor.fetchall()
                 usuarios = []
                 for r in registros:
-                    usuarios.append({"id": r[0], "nome": r[1], "cargo": r[2]})
+                    usuarios.append({"id": r[0], "nome": r[1], "senha": r[2], "cargo": r[3]})
                 return usuarios
         except Exception as e:
             print(f"Erro ao listar usuarios: {e}")
@@ -54,10 +55,13 @@ class ServicoUsuario:
         try:
             with self.banco.obter_cursor() as (conn, cursor):
                 cursor.execute(
-                    "UPDATE USUARIO SET cargo = 99 WHERE id_usuario = %s",
-                    (usuario_id,)
+                    """
+                    UPDATE USUARIO
+                    SET CARGO = '99'
+                    WHERE ID_USUARIO = %s
+                    """,
+                    (usuario_id,),
                 )
-
 
                 if cursor.rowcount == 0:
                     conn.rollback()
