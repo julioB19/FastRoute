@@ -28,7 +28,7 @@
 }
 
 /* =======================
-   MAPA
+   MAPA MINI
    ======================= */
 .minimapa {
     width: 100%;
@@ -36,6 +36,22 @@
     border-radius: 10px;
     overflow: hidden;
     background: #fff;
+}
+
+/* BOTÃO DE EXPANDIR MAPA */
+.btn-mapa-expandido {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+}
+
+.btn-mapa-expandido i {
+    font-size: 1.8rem;
+    color: var(--verde-escuro);
+}
+
+.btn-mapa-expandido:hover i {
+    color: #0d3d0d;
 }
 
 /* =======================
@@ -123,10 +139,7 @@
     top: 4px;
 }
 
-/* =======================
-   DIA ATUAL (VERSÃO FINAL)
-   ======================= */
-
+/* Dia atual */
 .mc-day.today {
     background: rgba(165, 214, 167, 0.377);
     border: 2px solid #1b5e20;
@@ -136,18 +149,15 @@
     justify-content: center;
 }
 
-/* Número maior sem aumentar a célula */
 .mc-day.today .mc-num {
-    transform: scale(1.5);      /* aumenta visualmente */
+    transform: scale(1.5);
     transform-origin: center;
     font-weight: 900;
     color: #0b3d0b;
     line-height: 1;
 }
 
-/* =======================
-   RESPONSIVO
-   ======================= */
+/* RESPONSIVO */
 @media (max-width: 420px) {
     .mini-compact-calendar .mc-grid {
         grid-auto-rows: 34px;
@@ -155,4 +165,68 @@
     .mini-compact-calendar {
         height: 280px;
     }
+}
+
+/* =======================
+   OVERLAY DO MAPA EXPANDIDO
+   ======================= */
+
+.overlay-mapa {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.65);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 3000;
+}
+
+.overlay-mapa-content {
+    width: 90%;
+    max-width: 1100px;
+    height: 85%;
+    background: white;
+    border-radius: 16px;
+    padding: 20px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+#mapaExpandido {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+/* Botão de fechar overlay */
+.btn-fechar-mapa {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    border: none;
+    background: #d32f2f;
+    color: white;
+    font-size: 28px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.btn-fechar-mapa:hover {
+    background: #b71c1c;
+}
+
+.titulo-overlay {
+    text-align: center;
+    font-weight: 700;
+    color: #1b5e20;
+    margin-bottom: 12px;
+    font-size: 1.3rem;
 }

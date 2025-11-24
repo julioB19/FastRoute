@@ -68,11 +68,10 @@
                     <p class="valor-bloco mb-1">{{ entregas_ultimo_mes }}</p>
                     <small class="text-muted">Dias com entregas marcados no calendário</small>
 
-                <div class="calendario-wrapper mt-3">
-                    <div id="miniCompactCalendario" class="mini-compact-calendar" aria-label="Calendário compacto"></div>
-                </div>
+                    <div class="calendario-wrapper mt-3">
+                        <div id="miniCompactCalendario" class="mini-compact-calendar" aria-label="Calendário compacto"></div>
+                    </div>
 
-                    
                 </div>
             </div>
         </div>
@@ -81,11 +80,20 @@
         <div class="col-12 col-lg-6">
             <div class="card dashboard-card h-100 position-relative">
 
-                <div class="card-body text-center">
+                <div class="card-body text-center position-relative">
+
                     <h5 class="titulo-bloco">Mapa de Entregas Pendentes</h5>
                     <small class="text-muted">Pedidos importados ainda não entregues</small>
 
                     <div id="miniMapa" class="mt-3 minimapa"></div>
+
+                    <!-- BOTÃO PARA ABRIR O MAPA EXPANDIDO -->
+                    <button id="abrirMapaExpandidoBtn"
+                        class="btn-mapa-expandido position-absolute"
+                        style="top: 12px; right: 20px; z-index: 50;"
+                        title="Expandir mapa">
+                        <i class="bi bi-arrows-fullscreen seta-bloco"></i>
+                    </button>
 
                 </div>
 
@@ -93,8 +101,18 @@
         </div>
 
     </div>
-
 </div>
+
+
+<!-- OVERLAY DO MAPA EXPANDIDO -->
+<div id="overlayMapa" class="overlay-mapa" style="display: none;">
+    <div class="overlay-mapa-content">
+        <button id="fecharOverlayMapa" class="btn-fechar-mapa">×</button>
+        <h4 class="titulo-overlay">Mapa Completo de Entregas Pendentes</h4>
+        <div id="mapaExpandido"></div>
+    </div>
+</div>
+
 
 <!-- Dependências locais (FullCalendar + Leaflet) -->
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet" />
@@ -104,4 +122,5 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script src="{{ url_for('static', filename='js/home_dashboard.js') }}"></script>
+
 {% endblock %}

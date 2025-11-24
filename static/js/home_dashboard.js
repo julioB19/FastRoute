@@ -1,5 +1,5 @@
 // ======================
-//  Calendário Ultra-Compacto (correção final)
+//  Calendário Ultra-Compacto
 // ======================
 
 (function () {
@@ -14,13 +14,9 @@
                a.getDate() === b.getDate();
     }
 
-    // ================
-    // RENDERIZAR MÊS
-    // ================
     function renderMiniCompactCalendar(container, year, month, eventDates) {
         container.innerHTML = '';
 
-        // HEADER
         const header = document.createElement('div');
         header.className = 'mc-header';
 
@@ -43,8 +39,7 @@
         header.appendChild(nextBtn);
         container.appendChild(header);
 
-        // WEEKDAYS – agora começando no DOMINGO
-        const weekdays = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+        const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
         const grid = document.createElement('div');
         grid.className = 'mc-grid';
 
@@ -55,34 +50,27 @@
             grid.appendChild(w);
         });
 
-        const firstDay = new Date(year, month, 1).getDay(); // 0 = domingo
+        const firstDay = new Date(year, month, 1).getDay();
         const daysInMonth = new Date(year, month + 1, 0).getDate();
         const today = new Date();
 
-        // Preenche células vazias ANTES do dia 1
         for (let i = 0; i < firstDay; i++) {
             const emptyCell = document.createElement('div');
             emptyCell.className = 'mc-day empty';
             grid.appendChild(emptyCell);
         }
 
-        // Preenche os DIAS DO MÊS (somente)
         for (let d = 1; d <= daysInMonth; d++) {
             const cell = document.createElement('div');
             cell.className = 'mc-day';
 
             const date = new Date(year, month, d);
-
             const num = document.createElement('div');
             num.className = 'mc-num';
             num.innerText = d;
 
-            // HOJE destacado
-            if (sameDate(date, today)) {
-                cell.classList.add('today');
-            }
+            if (sameDate(date, today)) cell.classList.add('today');
 
-            // EVENTOS
             const hasEvent = eventDates.some(ed => sameDate(new Date(ed), date));
             if (hasEvent) {
                 const dot = document.createElement('div');
@@ -96,7 +84,6 @@
 
         container.appendChild(grid);
 
-        // NAVEGAÇÃO SEM CHAMAR TEMPLATES (corrigido!)
         prevBtn.addEventListener('click', () => {
             const newDate = new Date(year, month - 1, 1);
             fetchEventsAndRender(container, newDate.getFullYear(), newDate.getMonth());
@@ -108,9 +95,6 @@
         });
     }
 
-    // ============================
-    // BUSCA EVENTOS (API)
-    // ============================
     function fetchEventsAndRender(container, year, month) {
         fetch('/entregas-datas')
             .then(res => res.json())
@@ -119,12 +103,11 @@
                 renderMiniCompactCalendar(container, year, month, eventDates);
             })
             .catch(err => {
-                console.error('Erro ao buscar eventos compactos', err);
+                console.error('Erro ao buscar eventos', err);
                 renderMiniCompactCalendar(container, year, month, []);
             });
     }
 
-    // INICIALIZAÇÃO
     document.addEventListener("DOMContentLoaded", function () {
         const el = document.getElementById('miniCompactCalendario');
         if (el) {
@@ -136,14 +119,16 @@
 })();
 
 // ======================
-//  MAPA LEAFLET (como já estava)
+//  MINI MAPA LEAFLET
 // ======================
 
 document.addEventListener("DOMContentLoaded", function () {
+
     const mapaEl = document.getElementById('miniMapa');
+
     if (mapaEl && typeof L !== 'undefined') {
 
-        const map = L.map('miniMapa').setView([-27.358885096802034, -53.39804321447416], 12);
+        const map = L.map('miniMapa').setView([-27.358885, -53.398043], 12);
 
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19
@@ -152,13 +137,14 @@ document.addEventListener("DOMContentLoaded", function () {
         fetch('/entregas-pendentes')
             .then(res => res.json())
             .then(marcadores => {
-                if (!marcadores || marcadores.length === 0) return;
-
                 const bounds = [];
+
                 marcadores.forEach(m => {
                     if (!m.lat || !m.lng) return;
+
                     const marker = L.marker([m.lat, m.lng]).addTo(map);
                     marker.bindPopup(m.n_nota ? `Pedido ${m.n_nota}` : 'Entrega pendente');
+
                     bounds.push([m.lat, m.lng]);
                 });
 
@@ -168,30 +154,39 @@ document.addEventListener("DOMContentLoaded", function () {
             });
     }
 });
-// ======================================================
-// OVERLAY DO MAPA EXPANDIDO
-// ======================================================
+
+// ======================
+//  MAPA EXPANDIDO (BOTÃO)
+// ======================
+
 document.addEventListener("DOMContentLoaded", function () {
 
-    const miniMapa = document.getElementById("miniMapa");
+    const btnAbrir = document.getElementById("abrirMapaExpandidoBtn");
     const overlay = document.getElementById("overlayMapa");
     const fechar = document.getElementById("fecharOverlayMapa");
+
+    if (!btnAbrir || !overlay || !fechar) {
+        console.error("Elemento do mapa expandido não encontrado.");
+        return;
+    }
+
     let mapaExpandido = null;
 
-    // Ao clicar no minimapa → abrir overlay
-    miniMapa.addEventListener("click", () => {
+    btnAbrir.addEventListener("click", () => {
+
         overlay.style.display = "flex";
 
         setTimeout(() => {
-            if (mapaExpandido === null) {
+
+            if (!mapaExpandido) {
+
                 mapaExpandido = L.map("mapaExpandido").setView([-27.358885, -53.398043], 12);
 
-                L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
                     maxZoom: 19
                 }).addTo(mapaExpandido);
 
-                // Carregar pedidos pendentes
-                fetch('/entregas-pendentes')
+                fetch("/entregas-pendentes")
                     .then(res => res.json())
                     .then(marcadores => {
                         const bounds = [];
@@ -200,8 +195,7 @@ document.addEventListener("DOMContentLoaded", function () {
                             if (!m.lat || !m.lng) return;
 
                             const marker = L.marker([m.lat, m.lng]).addTo(mapaExpandido);
-                            marker.bindPopup(m.n_nota ? `Pedido ${m.n_nota}` : 'Entrega pendente');
-
+                            marker.bindPopup(m.n_nota ? `Pedido ${m.n_nota}` : "Entrega pendente");
                             bounds.push([m.lat, m.lng]);
                         });
 
@@ -209,6 +203,7 @@ document.addEventListener("DOMContentLoaded", function () {
                             mapaExpandido.fitBounds(bounds, { padding: [30, 30] });
                         }
                     });
+
             } else {
                 mapaExpandido.invalidateSize();
             }
@@ -216,7 +211,6 @@ document.addEventListener("DOMContentLoaded", function () {
         }, 200);
     });
 
-    // Fechar overlay
     fechar.addEventListener("click", () => {
         overlay.style.display = "none";
     });
