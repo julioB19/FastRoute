@@ -11,7 +11,7 @@ import re
 app = Flask(__name__)
 app.secret_key = 'fastrout'  # Troque para uma chave mais segura em producao
 
-# Configuracoes do banco de dados (PostgreSQL)
+# Config BG
 DB_USER = "postgres"
 DB_PASSWORD = "1234"
 DB_HOST = "localhost"
@@ -23,8 +23,7 @@ banco_dados = None
 try:
     banco_dados = BancoDados(config_banco)
 except Exception:
-    # Falha ao conectar: continuar com None (modo local/fallback nos serviços)
-    banco_dados = None
+    banco_dados = None  # fallback
 
 servico_autenticacao = ServicoAutenticacao(banco_dados)
 servico_importacao = ServicoImportacao(banco_dados)
@@ -33,13 +32,12 @@ servico_usuario = ServicoUsuario(banco_dados)
 servico_pedidos = ServicoPedidosImportados(banco_dados)
 
 
-# Decorator para exigir login
+# Decorators
 def login_obrigatorio(func):
     def wrapper(*args, **kwargs):
         if 'usuario_id' not in session:
             return redirect(url_for('login_page'))
         return func(*args, **kwargs)
-
     wrapper.__name__ = func.__name__
     return wrapper
 
@@ -49,16 +47,16 @@ def admin_obrigatorio(func):
         if 'usuario_id' not in session:
             return redirect(url_for('login_page'))
         cargo = session.get('usuario_cargo')
-        # aceitar '1' ou 1
         if str(cargo) != '1':
             abort(403)
         return func(*args, **kwargs)
-
     wrapper.__name__ = func.__name__
     return wrapper
 
 
-# Rotas de autenticacao
+# -----------------------------
+# LOGIN
+# -----------------------------
 @app.route('/')
 def login_page():
     return render_template('login.html')
@@ -71,10 +69,9 @@ def realizar_login():
 
     sucesso, usuario, mensagem = servico_autenticacao.autenticar_usuario(nome, senha)
     if sucesso:
-        # usuario pode ser dict com id/nome/cargo conforme servico
-        session['usuario_id'] = usuario.get('id') if isinstance(usuario, dict) else usuario
-        session['usuario_nome'] = usuario.get('nome') if isinstance(usuario, dict) else nome
-        session['usuario_cargo'] = usuario.get('cargo') if isinstance(usuario, dict) and usuario.get('cargo') is not None else '0'
+        session['usuario_id'] = usuario.get('id')
+        session['usuario_nome'] = usuario.get('nome')
+        session['usuario_cargo'] = usuario.get('cargo')
         return redirect(url_for('home'))
     return render_template('login.html', erro=mensagem)
 
@@ -85,17 +82,29 @@ def realizar_logout():
     return redirect(url_for('login_page'))
 
 
+# -----------------------------
+# HOME (DASHBOARD)
+# -----------------------------
 @app.route('/home')
 @login_obrigatorio
 def home():
+    # Totais para o dashboard
+    total_completos = servico_pedidos.contar_completos()
+    total_incompletos = servico_pedidos.contar_incompletos()
+
     return render_template(
         'home.html',
         usuario=session.get('usuario_nome'),
         cargo=session.get('usuario_cargo'),
+        total_pedidos=total_completos,         # BLOCO 1
+        pedidos_incompletos=total_incompletos # BLOCO 2
+
     )
 
 
-# Rotas de importacao
+# -----------------------------
+# IMPORTAÇÃO
+# -----------------------------
 @app.route('/importar', methods=['GET'])
 @login_obrigatorio
 def pagina_importacao():
@@ -116,50 +125,50 @@ def processar_importacao():
     arquivo = request.files.get('arquivo')
     if not arquivo:
         return redirect(url_for('pagina_importacao', erro="Nenhum arquivo selecionado."))
+
     sucesso, mensagem = servico_importacao.importar_dados_csv(arquivo)
     if sucesso:
         return redirect(url_for('pagina_importacao', sucesso=mensagem))
     return redirect(url_for('pagina_importacao', erro=mensagem))
 
 
-# Rotas de veiculos
+# -----------------------------
+# VEÍCULOS
+# -----------------------------
 @app.route('/veiculos', methods=['GET'])
 @login_obrigatorio
 def pagina_veiculos():
     veiculos = servico_veiculo.listar_veiculos()
-    mensagem_sucesso = request.args.get('mensagem_sucesso')
-    erro = request.args.get('erro')
-
     return render_template(
         'cadastro_veiculo.html',
         usuario=session.get('usuario_nome'),
         cargo=session.get('usuario_cargo'),
         veiculos=veiculos,
-        mensagem_sucesso=mensagem_sucesso,
-        erro=erro,
+        mensagem_sucesso=request.args.get('mensagem_sucesso'),
+        erro=request.args.get('erro'),
     )
 
 
 @app.route('/cadastrar_veiculo', methods=['POST'])
 @login_obrigatorio
 def cadastrar_veiculo():
-    placa_regex = re.compile(r'^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$', re.IGNORECASE)
     dados_form = request.form
-    placa_input = dados_form.get('placa', '').strip().upper()
+    placa = dados_form.get('placa', '').strip().upper()
 
-    if not placa_regex.match(placa_input):
-        return redirect(url_for('pagina_veiculos', erro="Formato de placa invalido."))
+    placa_regex = re.compile(r'^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$', re.IGNORECASE)
+    if not placa_regex.match(placa):
+        return redirect(url_for('pagina_veiculos', erro="Formato de placa inválido."))
 
     try:
         dados = {
-            'placa': placa_input,
+            'placa': placa,
             'marca': dados_form.get('marca', '').strip(),
             'modelo': dados_form.get('modelo', '').strip(),
             'tipo_carga': int(dados_form.get('tipo_carga', 0)),
-            'limite_peso': float(dados_form.get('limite_peso', 0.0)),
+            'limite_peso': float(dados_form.get('limite_peso', 0)),
         }
-    except Exception:
-        return redirect(url_for('pagina_veiculos', erro="Erro nos dados do veículo."))
+    except:
+        return redirect(url_for('pagina_veiculos', erro="Erro nos dados."))
 
     sucesso, mensagem = servico_veiculo.cadastrar_veiculo(dados)
     if sucesso:
@@ -177,10 +186,10 @@ def atualizar_veiculo():
             'marca': dados_form.get('marca', '').strip(),
             'modelo': dados_form.get('modelo', '').strip(),
             'tipo_carga': int(dados_form.get('tipo_carga', 0)),
-            'limite_peso': float(dados_form.get('limite_peso', 0.0)),
+            'limite_peso': float(dados_form.get('limite_peso', 0)),
         }
-    except Exception:
-        return redirect(url_for('pagina_veiculos', erro="Erro nos dados do veículo."))
+    except:
+        return redirect(url_for('pagina_veiculos', erro="Erro nos dados."))
 
     sucesso, mensagem = servico_veiculo.atualizar_veiculo(dados)
     if sucesso:
@@ -197,28 +206,35 @@ def excluir_veiculo(placa):
     return redirect(url_for('pagina_veiculos', erro=mensagem))
 
 
-# Rotas de usuarios
+# -----------------------------
+# USUÁRIOS
+# -----------------------------
 @app.route('/usuarios', methods=['GET'])
 @admin_obrigatorio
 def pagina_usuarios():
     usuarios = servico_usuario.listar_usuarios()
-    mensagem_sucesso = request.args.get('mensagem_sucesso')
-    erro = request.args.get('erro')
-    return render_template('cadastro_usuario.html', usuario=session.get('usuario_nome'), usuarios=usuarios, mensagem_sucesso=mensagem_sucesso, erro=erro)
+    return render_template(
+        'cadastro_usuario.html',
+        usuario=session.get('usuario_nome'),
+        usuarios=usuarios,
+        mensagem_sucesso=request.args.get('mensagem_sucesso'),
+        erro=request.args.get('erro'),
+    )
 
 
 @app.route('/cadastrar_usuario', methods=['POST'])
 @admin_obrigatorio
 def cadastrar_usuario():
     dados_form = request.form
+
     try:
         dados = {
             'nome': dados_form.get('nome', '').strip(),
             'senha': dados_form.get('senha', ''),
             'cargo': int(dados_form.get('cargo', 0)),
         }
-    except Exception:
-        return redirect(url_for('pagina_usuarios', erro="Erro nos dados do usuário."))
+    except:
+        return redirect(url_for('pagina_usuarios', erro="Erro nos dados."))
 
     sucesso, mensagem = servico_usuario.cadastrar_usuario(dados)
     if sucesso:
@@ -230,15 +246,16 @@ def cadastrar_usuario():
 @admin_obrigatorio
 def atualizar_usuario():
     dados_form = request.form
+
     try:
         dados = {
-            'id': int(dados_form.get('usuario_id', 0)),
+            'id': int(dados_form.get('usuario_id')),
             'nome': dados_form.get('nome', '').strip(),
             'senha': dados_form.get('senha', ''),
             'cargo': int(dados_form.get('cargo', 0)),
         }
-    except Exception:
-        return redirect(url_for('pagina_usuarios', erro="Erro nos dados do usuário."))
+    except:
+        return redirect(url_for('pagina_usuarios', erro="Erro nos dados."))
 
     sucesso, mensagem = servico_usuario.atualizar_usuario(dados)
     if sucesso:
@@ -255,7 +272,9 @@ def excluir_usuario(usuario_id):
     return redirect(url_for('pagina_usuarios', erro=mensagem))
 
 
-#Rotas de Pedidos
+# -----------------------------
+# PEDIDOS IMPORTADOS
+# -----------------------------
 @app.route('/pedidos_importados')
 @login_obrigatorio
 def pedidos_importados():
@@ -263,7 +282,6 @@ def pedidos_importados():
     filtro = request.args.get('filtro', default='todos')
     data_nota = request.args.get('data_nota', default='').strip()
 
-    # itens por pagina (dropdown)
     itens_por_pagina = request.args.get('itens', default=20, type=int)
     if itens_por_pagina not in (20, 50, 100):
         itens_por_pagina = 20
@@ -271,44 +289,46 @@ def pedidos_importados():
     filtros = {}
     cliente_id = request.args.get('cliente_id')
     if cliente_id:
-        filtros['cliente_id'] = cliente_id
+        filtros["cliente_id"] = cliente_id
 
-    # mapear seleção do template para filtros
-    if filtro == 'completos':
-        filtros['coords_not_null'] = True
-    elif filtro == 'incompletos':
-        filtros['coords_null'] = True
-    elif filtro == 'entregue':
-        filtros['entregue'] = True
-    # 'todos' não adiciona filtros
+    if filtro == "completos":
+        filtros["coords_not_null"] = True
+    elif filtro == "incompletos":
+        filtros["coords_null"] = True
+    elif filtro == "entregue":
+        filtros["entregue"] = True
 
-    # aplicar filtro por data da nota se informado
     if data_nota:
-        filtros['data_inicio'] = data_nota
-        filtros['data_fim'] = data_nota
+        filtros["data_inicio"] = data_nota
+        filtros["data_fim"] = data_nota
 
-    # passar itens_por_pagina para o serviço via filtros
-    filtros['itens_por_pagina'] = itens_por_pagina
+    filtros["itens_por_pagina"] = itens_por_pagina
 
     pag = servico_pedidos.listar_pedidos(pagina, filtros)
     clientes = servico_pedidos.buscar_clientes()
+
     try:
-        return render_template('pedidos_importados.html',
-                               usuario=session.get('usuario_nome'),
-                               cargo=session.get('usuario_cargo'),
-                               pedidos=pag.get('pedidos'),
-                               pagina=pag.get('pagina'),
-                               total_paginas=pag.get('total_paginas'),
-                               total_registros=pag.get('total_registros'),
-                               clientes=clientes,
-                               filtro=filtro,
-                               data_nota=data_nota,
-                               itens_por_pagina=itens_por_pagina)
+        return render_template(
+            'pedidos_importados.html',
+            usuario=session.get('usuario_nome'),
+            cargo=session.get('usuario_cargo'),
+            pedidos=pag["pedidos"],
+            pagina=pag["pagina"],
+            total_paginas=pag["total_paginas"],
+            total_registros=pag["total_registros"],
+            clientes=clientes,
+            filtro=filtro,
+            data_nota=data_nota,
+            itens_por_pagina=itens_por_pagina,
+        )
     except TemplateNotFound:
-        return render_template('home.html',
-                               usuario=session.get('usuario_nome'),
-                               pedidos=pag.get('pedidos'),
-                               clientes=clientes)
+        return render_template(
+            'home.html',
+            usuario=session.get('usuario_nome'),
+            pedidos=pag["pedidos"],
+            clientes=clientes,
+        )
+
 
 @app.route("/detalhar_pedido/<int:n_nota>")
 @login_obrigatorio
@@ -319,25 +339,33 @@ def detalhar_pedido(n_nota):
     if not pedido:
         return {"erro": "Pedido não encontrado"}, 404
 
-    return {
-        "pedido": pedido,
-        "itens": itens
-    }
+    return {"pedido": pedido, "itens": itens}
 
+
+# -----------------------------
+# RELATÓRIOS
+# -----------------------------
 @app.route('/relatorios')
 @login_obrigatorio
 def relatorios():
-    # gerar relatório simples por filtros (reutiliza listar_pedidos)
     pagina = request.args.get('pagina', default=1, type=int)
     filtros = {}
     cliente_id = request.args.get('cliente_id')
     if cliente_id:
         filtros['cliente_id'] = cliente_id
+
     pag = servico_pedidos.listar_pedidos(pagina, filtros)
+
     try:
-        return render_template('relatorios.html', usuario=session.get('usuario_nome'), pedidos=pag.get('pedidos'), pagina=pag.get('pagina'), total_paginas=pag.get('total_paginas'))
+        return render_template(
+            'relatorios.html',
+            usuario=session.get('usuario_nome'),
+            pedidos=pag["pedidos"],
+            pagina=pag["pagina"],
+            total_paginas=pag["total_paginas"],
+        )
     except TemplateNotFound:
-        return jsonify({"pedidos": pag.get('pedidos'), "pagina": pag.get('pagina'), "total_paginas": pag.get('total_paginas')})
+        return jsonify(pag)
 
 
 @app.route('/entregas_pendentes')
@@ -345,11 +373,23 @@ def relatorios():
 def entregas_pendentes():
     pagina = request.args.get('pagina', default=1, type=int)
     filtros = {'status': 'PENDENTE'}
-    pag = servico_pedidos.listar_pedidos(pagina, filtros)
-    try:
-        return render_template('entregas_pendentes.html', usuario=session.get('usuario_nome'), pedidos=pag.get('pedidos'), pagina=pag.get('pagina'), total_paginas=pag.get('total_paginas'))
-    except TemplateNotFound:
-        return jsonify({"pedidos": pag.get('pedidos'), "pagina":pag.get('pagina'), "total_paginas": pag.get('total_paginas')})
 
+    pag = servico_pedidos.listar_pedidos(pagina, filtros)
+
+    try:
+        return render_template(
+            'entregas_pendentes.html',
+            usuario=session.get('usuario_nome'),
+            pedidos=pag["pedidos"],
+            pagina=pag["pagina"],
+            total_paginas=pag["total_paginas"],
+        )
+    except TemplateNotFound:
+        return jsonify(pag)
+
+
+# -----------------------------
+# MAIN
+# -----------------------------
 if __name__ == '__main__':
     app.run(debug=True)

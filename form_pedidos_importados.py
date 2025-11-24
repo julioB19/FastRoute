@@ -25,7 +25,7 @@ class ServicoPedidosImportados:
             return []
 
     # -----------------------------------------------------
-    # Lista de clientes para o filtro
+    # Lista de clientes para filtro
     # -----------------------------------------------------
     def buscar_clientes(self):
         query = """
@@ -36,7 +36,30 @@ class ServicoPedidosImportados:
         return self._execute_select(query)
 
     # -----------------------------------------------------
-    # Construção dos filtros da tela
+    # Funções NOVAS para o dashboard
+    # -----------------------------------------------------
+    def contar_completos(self):
+        query = """
+            SELECT COUNT(*) AS total
+            FROM PEDIDO p
+            LEFT JOIN ENDERECO_CLIENTE ec ON ec.id_endereco = p.id_endereco
+            WHERE ec.coordenadas IS NOT NULL AND ec.coordenadas <> '';
+        """
+        rows = self._execute_select(query)
+        return rows[0]["total"] if rows else 0
+
+    def contar_incompletos(self):
+        query = """
+            SELECT COUNT(*) AS total
+            FROM PEDIDO p
+            LEFT JOIN ENDERECO_CLIENTE ec ON ec.id_endereco = p.id_endereco
+            WHERE ec.coordenadas IS NULL OR ec.coordenadas = '';
+        """
+        rows = self._execute_select(query)
+        return rows[0]["total"] if rows else 0
+
+    # -----------------------------------------------------
+    # Construção dos filtros do frontend
     # -----------------------------------------------------
     def _build_filtros_sql(self, filtros: Optional[Dict[str, Any]]):
         where_parts = []
@@ -74,7 +97,7 @@ class ServicoPedidosImportados:
         return "", params
 
     # -----------------------------------------------------
-    # Mapeamento do pedido para o template
+    # Mapeamento do pedido → frontend
     # -----------------------------------------------------
     def _map_pedido(self, row: Dict[str, Any]) -> Dict[str, Any]:
         def format_data(v):
@@ -134,9 +157,9 @@ class ServicoPedidosImportados:
             pagina = 1
 
         where_sql, params = self._build_filtros_sql(filtros)
+
         itens_por_pagina = filtros.get("itens_por_pagina", self.por_pagina)
         offset = (pagina - 1) * itens_por_pagina
-
 
         query = f"""
             SELECT
@@ -174,7 +197,7 @@ class ServicoPedidosImportados:
         }
 
     # -----------------------------------------------------
-    # Buscar pedido para detalhes
+    # Buscar pedido (header da modal)
     # -----------------------------------------------------
     def buscar_pedido_por_id(self, pedido_id: int):
         query = """
@@ -199,7 +222,7 @@ class ServicoPedidosImportados:
         return rows[0] if rows else None
 
     # -----------------------------------------------------
-    # Buscar itens do pedido  **(AGORA DENTRO DA CLASSE)**
+    # Itens do pedido (com texto Normal / Agrotóxico)
     # -----------------------------------------------------
     def buscar_itens_pedido(self, n_nota: int):
         query = """
@@ -212,9 +235,9 @@ class ServicoPedidosImportados:
             LEFT JOIN PRODUTO p ON p.id_produto = pp.produto_id_produto
             WHERE pp.pedido_n_nota = %s;
         """
+
         itens = self._execute_select(query, (n_nota,))
 
-        # Tratamento da classificação
         for item in itens:
             if item.get("classificacao") == 2:
                 item["classificacao_texto"] = "Agrotóxico"
@@ -222,4 +245,3 @@ class ServicoPedidosImportados:
                 item["classificacao_texto"] = "Normal"
 
         return itens
-
