@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="pt-br">
   <head>
     <meta charset="utf-8">
@@ -17,14 +17,22 @@
       }
       body {
         font-family: "Poppins", "Segoe UI", sans-serif;
-        background: radial-gradient(circle at 20% 20%, rgba(242,194,0,0.15), transparent 30%),
-                    radial-gradient(circle at 80% 0%, rgba(15,81,50,0.12), transparent 30%),
-                    linear-gradient(180deg, #ffffff 0%, var(--cinza-fundo) 100%);
+        min-height: 100vh;
+        background-image: linear-gradient(rgba(15, 42, 24, 0.45), rgba(15, 42, 24, 0.65)), url("{{ url_for('static', filename='images/login-bg.png') }}");
+        background-repeat: no-repeat;
+        background-size: cover;
+        background-position: 66% 62%;
+        background-attachment: fixed;
+        color: #f7f7f7;
+        overflow: hidden;
+        position: relative;
       }
       .card {
-        border: 1px solid var(--cinza-borda);
-        box-shadow: 0 20px 45px rgba(0,0,0,0.08);
+        border: 1px solid rgba(47,139,78,0.35);
+        box-shadow: 0 20px 45px rgba(0,0,0,0.24);
         border-radius: 18px;
+        background: rgba(47,139,78,0.18);
+        backdrop-filter: blur(4px);
       }
       .btn-cotri {
         background: linear-gradient(90deg, var(--verde-claro), var(--verde-medio));
@@ -36,21 +44,44 @@
         color: #fff;
       }
       .logo-text {
-        color: var(--verde-escuro);
+        color: #f7f7f7;
         font-weight: 700;
-        font-size: 1.1rem;
+        font-size: 1.2rem;
+        letter-spacing: 0.02em;
+        text-align: center;
+      }
+      .sub-logo {
+        font-size: 0.9rem;
+        color: rgba(255,255,255,0.85);
+      }
+      .form-label {
+        color: #e8f0eb;
+      }
+      .form-control {
+        background: rgba(0,0,0,0.12);
+        border: 1px solid rgba(255,255,255,0.1);
+        color: #f7f7f7;
+      }
+      .form-control:focus {
+        box-shadow: 0 0 0 0.2rem rgba(47,139,78,0.35);
+        border-color: var(--verde-claro);
+        background: rgba(0,0,0,0.18);
+      }
+      .brand-wrapper img {
+        width: 110px;
+        height: 50px;
+        object-fit: contain;
+        filter: drop-shadow(0 10px 18px rgba(0,0,0,0.25));
       }
     </style>
   </head>
   <body>
-    <div class="container-fluid d-flex justify-content-center align-items-center min-vh-100 px-3 py-4">
-      <div class="card p-4 shadow-sm w-100" style="max-width: 430px;">
-        <div class="d-flex align-items-center mb-4">
-          <div>
-            <div class="logo-text">Cotrifred</div>
-            <div style="font-size: 0.85rem; color: #4a4a4a;">Gestor de Rotas</div>
-          </div>
-          <img src="{{ url_for('static', filename='images/iconeFastRoute.png') }}" alt="Logo" class="ms-auto" style="width: 90px; height: 40px;">
+    <div class="container-fluid d-flex justify-content-center align-items-center min-vh-100 px-3 py-5 position-relative">
+      <div class="card p-4 shadow-sm w-100" style="max-width: 460px;">
+        <div class="brand-wrapper text-center mb-3">
+          <img src="{{ url_for('static', filename='images/iconeFastRouteBranco.png') }}" alt="Logo Fast Route">
+          <div class="logo-text">FastRoute</div>
+          <div class="sub-logo">Gestor de Rotas</div>
         </div>
 
         {% if erro %}
@@ -61,7 +92,7 @@
 
         <form action="{{ url_for('realizar_login') }}" method="post">
           <div class="mb-3">
-            <label for="usernameInput" class="form-label">Usuário</label>
+            <label for="usernameInput" class="form-label">Usuario</label>
             <input type="text" class="form-control" id="usernameInput" name="usuario" required>
           </div>
           <div class="mb-3">

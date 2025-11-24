@@ -120,7 +120,7 @@ class ServicoImportacao:
 
                 conn.commit()
 
-            return True, "Importacao concluida com sucesso!"
+            return True, "Importação concluída com sucesso!"
         except Exception as e:
             return False, f"Erro ao processar arquivo: {e}"
 
