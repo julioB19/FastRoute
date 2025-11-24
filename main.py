@@ -216,6 +216,7 @@ def pagina_usuarios():
     return render_template(
         'cadastro_usuario.html',
         usuario=session.get('usuario_nome'),
+        cargo=session.get('usuario_cargo'),
         usuarios=usuarios,
         mensagem_sucesso=request.args.get('mensagem_sucesso'),
         erro=request.args.get('erro'),
