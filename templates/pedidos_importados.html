@@ -5,34 +5,40 @@
 <link href="{{ url_for('static', filename='css/pedidos_importados.css') }}" rel="stylesheet">
 
 <div class="container-fluid mt-4 px-3 px-md-4">
+
     <div class="row">
         <div class="col-12">
-            <h4 class="mb-3" style="color: var(--verde-escuro);">Pedidos Importados</h4>
+            <h4 class="mb-3" style="color: rgb(237, 194, 0);">Pedidos Importados</h4>
         </div>
     </div>
 
-    <!-- filtros -->
-    <form method="get" action="{{ url_for('pedidos_importados') }}" class="row g-3 mb-3">
+    <!-- FILTROS -->
+    <form method="get" action="{{ url_for('pedidos_importados') }}" class="row g-3 mb-3 text-white">
 
-        <input type="hidden" name="pagina" value="1">
+        <!-- TOTAL DE REGISTROS -->
+        <div class="col-12">
+            <span class="text-white" style="font-weight: 600; font-size: 16px;">
+                Total: {{ total_registros }}
+            </span>
+        </div>
 
         <div class="col-md-3">
-            <label class="form-label">Filtro</label>
+            <label class="form-label text-white">Filtro</label>
             <select class="form-select" name="filtro">
                 <option value="todos" {% if filtro == 'todos' %}selected{% endif %}>Todos</option>
                 <option value="completos" {% if filtro == 'completos' %}selected{% endif %}>Completos</option>
                 <option value="incompletos" {% if filtro == 'incompletos' %}selected{% endif %}>Incompletos</option>
-                <option value="entregue" {% if filtro == 'entregue' %}selected{% endif %}>Entregue</option>
+                <option value="entregue" {% if filtro == 'entregues' %}selected{% endif %}>Entregues</option>
             </select>
         </div>
 
         <div class="col-md-3">
-            <label class="form-label">Data da Nota</label>
+            <label class="form-label text-white">Data da Nota</label>
             <input type="date" class="form-control" name="data_nota" value="{{ data_nota }}">
         </div>
 
         <div class="col-md-2">
-            <label class="form-label">Itens por página</label>
+            <label class="form-label text-white">Itens por página</label>
             <select class="form-select" name="itens" onchange="this.form.submit()">
                 <option value="20" {% if itens_por_pagina == 20 %}selected{% endif %}>20</option>
                 <option value="50" {% if itens_por_pagina == 50 %}selected{% endif %}>50</option>
@@ -42,15 +48,16 @@
 
         <div class="col-md-3 d-flex align-items-end">
             <button class="btn btn-cotri">Aplicar</button>
-            <a href="{{ url_for('pedidos_importados') }}" class="btn btn-outline-secondary ms-2">Limpar</a>
+            <a href="{{ url_for('pedidos_importados') }}" class="btn btn-outline-light ms-2">Limpar</a>
         </div>
 
     </form>
 
-    <!-- tabela -->
+    <!-- TABELA -->
     <div class="card shadow-sm">
         <div class="card-body p-0">
             <div class="table-responsive">
+
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
@@ -62,6 +69,7 @@
                             <th>Ações</th>
                         </tr>
                     </thead>
+
                     <tbody>
                         {% if pedidos %}
                             {% for p in pedidos %}
@@ -89,6 +97,7 @@
                                             Detalhes
                                         </button>
                                     </td>
+
                                 </tr>
                             {% endfor %}
                         {% else %}
@@ -99,9 +108,10 @@
                     </tbody>
                 </table>
 
-                <!-- PAGINAÇÃO SIMPLIFICADA -->
+                <!-- PAGINAÇÃO -->
                 {% if total_paginas > 1 %}
                 <nav class="mt-3">
+
                     <ul class="pagination justify-content-center">
 
                         {% set args_base = request.args.to_dict() %}
@@ -110,7 +120,7 @@
                         <!-- Botão Anterior -->
                         <li class="page-item {% if pagina <= 1 %}disabled{% endif %}">
                             <a class="page-link"
-                            href="{{ url_for('pedidos_importados', pagina=pagina-1, **args_base) }}">
+                               href="{{ url_for('pedidos_importados', pagina=pagina-1, **args_base) }}">
                                 « Anterior
                             </a>
                         </li>
@@ -125,7 +135,7 @@
                         <!-- Botão Próxima -->
                         <li class="page-item {% if pagina >= total_paginas %}disabled{% endif %}">
                             <a class="page-link"
-                            href="{{ url_for('pedidos_importados', pagina=pagina+1, **args_base) }}">
+                               href="{{ url_for('pedidos_importados', pagina=pagina+1, **args_base) }}">
                                 Próxima »
                             </a>
                         </li>
@@ -135,19 +145,19 @@
                     <!-- Botão Ir para Última Página -->
                     <div class="text-center">
                         <a class="btn btn-outline-primary mt-2"
-                        href="{{ url_for('pedidos_importados', pagina=total_paginas, **args_base) }}">
+                           href="{{ url_for('pedidos_importados', pagina=total_paginas, **args_base) }}">
                             Ir para última página ({{ total_paginas }})
                         </a>
                     </div>
                 </nav>
                 {% endif %}
+
             </div>
         </div>
     </div>
 </div>
 
-
-<!-- Modal de detalhes -->
+<!-- MODAL DETALHES -->
 <div class="modal fade" id="modalDetalhesPedido" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content">
@@ -196,6 +206,7 @@ window.abrirDetalhes = async function(nnota) {
         `;
 
         for (const it of dados.itens) {
+
             const cls = it.classificacao == 2
                 ? "<span class='badge bg-danger'>Agrotóxico</span>"
                 : "<span class='badge bg-success'>Normal</span>";
