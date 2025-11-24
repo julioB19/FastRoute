@@ -24,9 +24,10 @@ class ServicoPedidosImportados:
                 "cliente_id": 1,
                 "cliente_nome": "Cliente A",
                 "data_importacao": datetime.datetime.now().isoformat(),
+                "data_nota": (datetime.datetime.now() - datetime.timedelta(days=2)).isoformat(),
                 "status": "PENDENTE",
                 "peso": 120.5,
-                "endereco_entrega": "Rua A, 123",
+                "endereco_entrega": "Rua A, CidadeX, 123",
                 "observacoes": "",
             },
             {
@@ -35,9 +36,10 @@ class ServicoPedidosImportados:
                 "cliente_id": 2,
                 "cliente_nome": "Cliente B",
                 "data_importacao": (datetime.datetime.now() - datetime.timedelta(days=1)).isoformat(),
+                "data_nota": (datetime.datetime.now() - datetime.timedelta(days=3)).isoformat(),
                 "status": "ENTREGUE",
                 "peso": 45.0,
-                "endereco_entrega": "Av. B, 456",
+                "endereco_entrega": "Av. B, CidadeY, 456",
                 "observacoes": "Fragil",
             },
         ]
@@ -95,6 +97,10 @@ class ServicoPedidosImportados:
         return []
 
     def _build_filtros_sql(self, filtros: Optional[Dict[str, Any]]) -> Tuple[str, List[Any]]:
+        """
+        Agora os filtros de data aplicam-se à data da nota (data_nota).
+        Aceita chaves: cliente_id, status, data_inicio, data_fim
+        """
         where_parts = []
         params: List[Any] = []
         if not filtros:
@@ -105,15 +111,56 @@ class ServicoPedidosImportados:
         if filtros.get("status"):
             where_parts.append("p.status = %s")
             params.append(filtros["status"])
+        # filtros de data agora usam p.data_nota (data da nota)
         if filtros.get("data_inicio"):
-            where_parts.append("p.data_importacao >= %s")
+            where_parts.append("p.data_nota >= %s")
             params.append(filtros["data_inicio"])
         if filtros.get("data_fim"):
-            where_parts.append("p.data_importacao <= %s")
+            where_parts.append("p.data_nota <= %s")
             params.append(filtros["data_fim"])
         if where_parts:
             return " WHERE " + " AND ".join(where_parts), params
         return "", params
+
+    # Mapeia um registro do banco/fallback para os campos usados pelo template pedidos_importados.html
+    def _map_pedido_para_template(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        def _format_data(v):
+            if not v:
+                return None
+            if isinstance(v, str):
+                return v.split("T")[0] if "T" in v else (v[:10] if len(v) >= 10 else v)
+            try:
+                return v.date().isoformat()
+            except Exception:
+                return str(v)
+
+        cliente_nome = row.get("cliente_nome") or row.get("cliente") or row.get("cliente_nome")
+        endereco = row.get("endereco") or row.get("endereco_entrega") or row.get("observacoes") or ""
+        # tentar extrair cidade do endereço (se presente como "rua, cidade, nº")
+        cidade = ""
+        try:
+            if endereco and "," in endereco:
+                parts = [p.strip() for p in endereco.split(",")]
+                if len(parts) >= 2:
+                    cidade = parts[1]
+        except Exception:
+            cidade = ""
+
+        status = (row.get("status") or "").upper()
+        completo = bool(row.get("completo")) or (status in ("ENTREGUE", "COMPLETO", "OK"))
+
+        # usar data_nota (data da nota) como data exibida na coluna (substitui data_prevista)
+        data_nota = row.get("data_nota") or row.get("data_emissao") or row.get("data_importacao")
+
+        return {
+            "id": row.get("id"),
+            "cliente": cliente_nome,
+            "cidade": cidade,
+            "endereco": endereco,
+            "data_prevista": _format_data(data_nota),  # campo do template mantém nome data_prevista
+            "completo": completo,
+            "_orig": row,
+        }
 
     def contar_pedidos(self, filtros: Optional[Dict[str, Any]] = None) -> int:
         if not self.banco:
@@ -148,33 +195,36 @@ class ServicoPedidosImportados:
             total_paginas = math.ceil(total / self.por_pagina) if total else 1
             start = (pagina - 1) * self.por_pagina
             end = start + self.por_pagina
+            subset = self._pedidos_demo[start:end]
+            pedidos_mapeados = [self._map_pedido_para_template(r) for r in subset]
             return {
-                "pedidos": self._pedidos_demo[start:end],
+                "pedidos": pedidos_mapeados,
                 "pagina": pagina,
                 "total_paginas": total_paginas,
                 "total_registros": total,
             }
 
         where_sql, params = self._build_filtros_sql(filtros)
-        # Selecionar campos (ajuste conforme seu schema)
+        # Selecionar campos (ajuste conforme seu schema) - incluir data_nota (data da nota)
         query = (
             "SELECT p.id, p.numero_pedido, p.cliente_id, c.nome AS cliente_nome, "
-            "p.data_importacao, p.status, p.peso, p.endereco_entrega, p.observacoes "
+            "p.data_importacao, p.data_nota, p.status, p.peso, p.endereco_entrega, p.observacoes "
             "FROM pedidos_importados p "
             "LEFT JOIN cliente c ON c.id = p.cliente_id "
             + where_sql +
-            " ORDER BY p.data_importacao DESC, p.id DESC "
+            " ORDER BY p.data_nota DESC NULLS LAST, p.data_importacao DESC, p.id DESC "
             "LIMIT %s OFFSET %s;"
         )
         # calcular paginação
         offset = (pagina - 1) * self.por_pagina
         params_for_query = (params or []) + [self.por_pagina, offset]
-        rows = self._execute_select(query, tuple(params_for_query))
+        rows = self._execute_select(query, tuple(params_for_query)) or []
 
         total = self.contar_pedidos(filtros)
         total_paginas = math.ceil(total / self.por_pagina) if total else 1
+        pedidos_mapeados = [self._map_pedido_para_template(r) for r in rows]
         return {
-            "pedidos": rows,
+            "pedidos": pedidos_mapeados,
             "pagina": pagina,
             "total_paginas": total_paginas,
             "total_registros": total,
@@ -188,7 +238,7 @@ class ServicoPedidosImportados:
             return None
         query = (
             "SELECT p.id, p.numero_pedido, p.cliente_id, c.nome AS cliente_nome, "
-            "p.data_importacao, p.status, p.peso, p.endereco_entrega, p.observacoes "
+            "p.data_importacao, p.data_nota, p.status, p.peso, p.endereco_entrega, p.observacoes "
             "FROM pedidos_importados p "
             "LEFT JOIN cliente c ON c.id = p.cliente_id "
             "WHERE p.id = %s LIMIT 1;"

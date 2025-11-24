@@ -143,7 +143,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const mapaEl = document.getElementById('miniMapa');
     if (mapaEl && typeof L !== 'undefined') {
 
-        const map = L.map('miniMapa').setView([-29.7, -53.7], 12);
+        const map = L.map('miniMapa').setView([-27.358885096802034, -53.39804321447416], 12);
 
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19
