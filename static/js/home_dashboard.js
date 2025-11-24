@@ -128,7 +128,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (mapaEl && typeof L !== 'undefined') {
 
-        const map = L.map('miniMapa').setView([-27.358885, -53.398043], 12);
+        const map = L.map('miniMapa').setView([-27.358885, -53.398043], 12); //Coordenadas iniciais(Meio de FW)
 
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19
