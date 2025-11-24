@@ -35,6 +35,17 @@ def login_obrigatorio(func):
     return wrapper
 
 
+# Decorator para exigir permissao de administrador
+def admin_obrigatorio(func):
+    def wrapper(*args, **kwargs):
+        if session.get('cargo') != 1:
+            return redirect(url_for('home'))
+        return func(*args, **kwargs)
+
+    wrapper.__name__ = func.__name__
+    return wrapper
+
+
 # Rotas de autenticacao
 @app.route('/')
 def login_page():
@@ -50,6 +61,7 @@ def realizar_login():
     if sucesso:
         session['usuario_id'] = usuario["id"]
         session['usuario_nome'] = usuario["nome"]
+        session['cargo'] = usuario["cargo"]
         return redirect(url_for('home'))
     return render_template('login.html', erro=mensagem)
 
@@ -72,6 +84,13 @@ def home():
 def pagina_importacao():
     clientes = servico_importacao.buscar_clientes()
     return render_template('importar.html', usuario=session.get('usuario_nome'), clientes=clientes)
+
+
+@app.route('/pedidos', methods=['GET'])
+@login_obrigatorio
+def pagina_pedidos():
+    pedidos = servico_importacao.listar_pedidos()
+    return render_template('pedidos.html', usuario=session.get('usuario_nome'), pedidos=pedidos)
 
 
 @app.route('/processar_importacao', methods=['POST'])
@@ -169,6 +188,7 @@ def excluir_veiculo(placa):
 # Rotas de usuarios
 @app.route('/usuarios', methods=['GET'])
 @login_obrigatorio
+@admin_obrigatorio
 def pagina_usuarios():
     usuarios = servico_usuario.listar_usuarios()
     mensagem_sucesso = request.args.get('mensagem_sucesso')
@@ -185,6 +205,7 @@ def pagina_usuarios():
 
 @app.route('/cadastrar_usuario', methods=['POST'])
 @login_obrigatorio
+@admin_obrigatorio
 def cadastrar_usuario():
     dados_form = request.form
     try:
@@ -204,6 +225,7 @@ def cadastrar_usuario():
 
 @app.route('/atualizar_usuario', methods=['POST'])
 @login_obrigatorio
+@admin_obrigatorio
 def atualizar_usuario():
     dados_form = request.form
     try:
@@ -224,6 +246,7 @@ def atualizar_usuario():
 
 @app.route('/excluir_usuario/<int:usuario_id>', methods=['POST'])
 @login_obrigatorio
+@admin_obrigatorio
 def excluir_usuario(usuario_id):
     sucesso, mensagem = servico_usuario.excluir_usuario(usuario_id)
     if sucesso:
