@@ -263,6 +263,11 @@ def pedidos_importados():
     filtro = request.args.get('filtro', default='todos')
     data_nota = request.args.get('data_nota', default='').strip()
 
+    # itens por pagina (dropdown)
+    itens_por_pagina = request.args.get('itens', default=20, type=int)
+    if itens_por_pagina not in (20, 50, 100):
+        itens_por_pagina = 20
+
     filtros = {}
     cliente_id = request.args.get('cliente_id')
     if cliente_id:
@@ -282,6 +287,9 @@ def pedidos_importados():
         filtros['data_inicio'] = data_nota
         filtros['data_fim'] = data_nota
 
+    # passar itens_por_pagina para o serviço via filtros
+    filtros['itens_por_pagina'] = itens_por_pagina
+
     pag = servico_pedidos.listar_pedidos(pagina, filtros)
     clientes = servico_pedidos.buscar_clientes()
     try:
@@ -294,13 +302,27 @@ def pedidos_importados():
                                total_registros=pag.get('total_registros'),
                                clientes=clientes,
                                filtro=filtro,
-                               data_nota=data_nota)
+                               data_nota=data_nota,
+                               itens_por_pagina=itens_por_pagina)
     except TemplateNotFound:
         return render_template('home.html',
                                usuario=session.get('usuario_nome'),
                                pedidos=pag.get('pedidos'),
                                clientes=clientes)
 
+@app.route("/detalhar_pedido/<int:n_nota>")
+@login_obrigatorio
+def detalhar_pedido(n_nota):
+    pedido = servico_pedidos.buscar_pedido_por_id(n_nota)
+    itens = servico_pedidos.buscar_itens_pedido(n_nota)
+
+    if not pedido:
+        return {"erro": "Pedido não encontrado"}, 404
+
+    return {
+        "pedido": pedido,
+        "itens": itens
+    }
 
 @app.route('/relatorios')
 @login_obrigatorio
@@ -327,7 +349,7 @@ def entregas_pendentes():
     try:
         return render_template('entregas_pendentes.html', usuario=session.get('usuario_nome'), pedidos=pag.get('pedidos'), pagina=pag.get('pagina'), total_paginas=pag.get('total_paginas'))
     except TemplateNotFound:
-        return jsonify({"pedidos": pag.get('pedidos'), "pagina": pag.get('pagina'), "total_paginas": pag.get('total_paginas')})
+        return jsonify({"pedidos": pag.get('pedidos'), "pagina":pag.get('pagina'), "total_paginas": pag.get('total_paginas')})
 
 if __name__ == '__main__':
     app.run(debug=True)

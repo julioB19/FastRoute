@@ -2,295 +2,224 @@ from typing import List, Dict, Any, Optional, Tuple
 import math
 import datetime
 
+
 class ServicoPedidosImportados:
-    def __init__(self, banco_dados=None, por_pagina: int = 10):
-        """
-        banco_dados: instância do seu módulo BancoDados (pode ser None para modo local)
-        por_pagina: quantidade de registros por página para paginação
-        """
+    def __init__(self, banco_dados=None, por_pagina: int = 99999):
         self.banco = banco_dados
         self.por_pagina = por_pagina
 
-        # Dados de fallback/local para desenvolvimento sem BD
-        self._clientes_demo = [
-            {"id": 1, "nome": "Cliente A"},
-            {"id": 2, "nome": "Cliente B"},
-            {"id": 3, "nome": "Cliente C"},
-        ]
-        self._pedidos_demo = [
-            {
-                "id": 1,
-                "numero_pedido": "IMP-0001",
-                "cliente_id": 1,
-                "cliente_nome": "Cliente A",
-                "data_importacao": datetime.datetime.now().isoformat(),
-                "data_nota": (datetime.datetime.now() - datetime.timedelta(days=2)).isoformat(),
-                "status": "PENDENTE",
-                "peso": 120.5,
-                "endereco_entrega": "Rua A, CidadeX, 123",
-                "observacoes": "",
-            },
-            {
-                "id": 2,
-                "numero_pedido": "IMP-0002",
-                "cliente_id": 2,
-                "cliente_nome": "Cliente B",
-                "data_importacao": (datetime.datetime.now() - datetime.timedelta(days=1)).isoformat(),
-                "data_nota": (datetime.datetime.now() - datetime.timedelta(days=3)).isoformat(),
-                "status": "ENTREGUE",
-                "peso": 45.0,
-                "endereco_entrega": "Av. B, CidadeY, 456",
-                "observacoes": "Fragil",
-            },
-        ]
-
-    # Utilitários para executar SELECT no banco de dados de forma genérica
+    # -----------------------------------------------------
+    # EXECUTOR DE SELECT 100% COMPATÍVEL COM SEU BancoDados
+    # -----------------------------------------------------
     def _execute_select(self, query: str, params: Optional[Tuple] = None) -> List[Dict[str, Any]]:
-        if not self.banco:
+        try:
+            with self.banco.obter_cursor() as (conn, cursor):
+                cursor.execute(query, params or ())
+                cols = [desc[0] for desc in cursor.description]
+                rows = cursor.fetchall()
+                return [dict(zip(cols, r)) for r in rows]
+        except Exception as e:
+            print("Erro no SELECT:", e)
+            print("Query:", query)
+            print("Params:", params)
             return []
 
-        # Se o objeto banco_dados fornecer um método genérico, use-o
-        if hasattr(self.banco, "executar_query"):
-            try:
-                result = self.banco.executar_query(query, params or ())
-                # assumir que executar_query já devolve lista de dicts
-                return result
-            except Exception:
-                pass
-
-        # Tentar usar conexão/cursor (psycopg2-style)
-        conn = getattr(self.banco, "conn", None) or getattr(self.banco, "connection", None) or None
-        cursor = None
-        try:
-            if conn:
-                cursor = conn.cursor()
-                cursor.execute(query, params or ())
-                cols = [d[0] for d in cursor.description] if cursor.description else []
-                rows = cursor.fetchall()
-                return [dict(zip(cols, r)) for r in rows]
-            # Alguns wrappers expõem cursor diretamente
-            if hasattr(self.banco, "cursor"):
-                cursor = self.banco.cursor()
-                cursor.execute(query, params or ())
-                cols = [d[0] for d in cursor.description] if cursor.description else []
-                rows = cursor.fetchall()
-                return [dict(zip(cols, r)) for r in rows]
-        finally:
-            try:
-                if cursor:
-                    cursor.close()
-            except Exception:
-                pass
-
-        # Se nenhum método funcionou, retornar lista vazia
-        return []
-
-    # Buscar clientes (para filtro na tela)
-    def buscar_clientes(self) -> List[Dict[str, Any]]:
-        if not self.banco:
-            return self._clientes_demo
-        query = "SELECT id, nome FROM cliente ORDER BY nome;"
-        rows = self._execute_select(query)
-        if rows:
-            return rows
-        # fallback vazio se não houver resultado
-        return []
-
-    def _build_filtros_sql(self, filtros: Optional[Dict[str, Any]]) -> Tuple[str, List[Any]]:
+    # -----------------------------------------------------
+    # Lista de clientes para o filtro
+    # -----------------------------------------------------
+    def buscar_clientes(self):
+        query = """
+            SELECT id_cliente AS id, nome_cliente AS nome
+            FROM CLIENTE
+            ORDER BY nome_cliente;
         """
-        Aceita chaves no dict filtros:
-          - cliente_id
-          - status (valor textual)
-          - data_inicio / data_fim (aplicados em p.data_nota)
-          - coords_not_null (True) => registros com coordenadas
-          - coords_null (True) => registros sem coordenadas
-          - entregue (True) => existe registro em entregas vinculando o pedido
-        """
+        return self._execute_select(query)
+
+    # -----------------------------------------------------
+    # Construção dos filtros da tela
+    # -----------------------------------------------------
+    def _build_filtros_sql(self, filtros: Optional[Dict[str, Any]]):
         where_parts = []
-        params: List[Any] = []
+        params = []
+
         if not filtros:
             return "", params
+
         if filtros.get("cliente_id"):
-            where_parts.append("p.cliente_id = %s")
+            where_parts.append("p.id_cliente = %s")
             params.append(int(filtros["cliente_id"]))
-        if filtros.get("status"):
-            where_parts.append("p.status = %s")
-            params.append(filtros["status"])
-        # filtros de data aplicam-se à data da nota (data_nota)
+
         if filtros.get("data_inicio"):
-            where_parts.append("p.data_nota >= %s")
+            where_parts.append("p.dt_nota >= %s")
             params.append(filtros["data_inicio"])
+
         if filtros.get("data_fim"):
-            where_parts.append("p.data_nota <= %s")
+            where_parts.append("p.dt_nota <= %s")
             params.append(filtros["data_fim"])
 
-        # coordenadas: tentar vários nomes de colunas possíveis
-        coords_checks = [
-            "(p.endereco_lat IS NOT NULL AND p.endereco_lng IS NOT NULL)",
-            "(p.latitude IS NOT NULL AND p.longitude IS NOT NULL)",
-            "(p.lat IS NOT NULL AND p.lon IS NOT NULL)",
-            "(p.lat IS NOT NULL AND p.lng IS NOT NULL)",
-            "(p.coordenadas IS NOT NULL)"  # caso haja JSON/texto
-        ]
         if filtros.get("coords_not_null"):
-            where_parts.append("(" + " OR ".join(coords_checks) + ")")
-        if filtros.get("coords_null"):
-            # todos os checks devem ser null -> negar cada check
-            neg_checks = ["NOT " + c for c in coords_checks]
-            where_parts.append("(" + " AND ".join(neg_checks) + ")")
+            where_parts.append("ec.coordenadas IS NOT NULL AND ec.coordenadas <> ''")
 
-        # entregue: existe registro na tabela entregas vinculando o pedido
+        if filtros.get("coords_null"):
+            where_parts.append("ec.coordenadas IS NULL OR ec.coordenadas = ''")
+
         if filtros.get("entregue"):
-            where_parts.append("EXISTS (SELECT 1 FROM entregas e WHERE e.pedido_id = p.id)")
+            where_parts.append(
+                "EXISTS (SELECT 1 FROM ENTREGA e WHERE e.pedido_n_nota = p.n_nota)"
+            )
 
         if where_parts:
             return " WHERE " + " AND ".join(where_parts), params
+
         return "", params
 
-    # Mapeia um registro do banco/fallback para os campos usados pelo template pedidos_importados.html
-    def _map_pedido_para_template(self, row: Dict[str, Any]) -> Dict[str, Any]:
-        def _format_data(v):
+    # -----------------------------------------------------
+    # Mapeamento do pedido para o template
+    # -----------------------------------------------------
+    def _map_pedido(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        def format_data(v):
             if not v:
                 return None
-            if isinstance(v, str):
-                return v.split("T")[0] if "T" in v else (v[:10] if len(v) >= 10 else v)
-            try:
-                return v.date().isoformat()
-            except Exception:
-                return str(v)
+            if isinstance(v, (datetime.date, datetime.datetime)):
+                return v.strftime("%Y-%m-%d")
+            return str(v)
 
-        numero = row.get("numero_pedido") or row.get("n_nota") or row.get("nota") or str(row.get("id") or "")
-        cliente_nome = row.get("cliente_nome") or row.get("cliente") or ""
-        endereco = row.get("endereco_entrega") or row.get("endereco") or row.get("observacoes") or ""
-        # usar data_nota (data da nota) como campo principal
-        data_nota = row.get("data_nota") or row.get("data_emissao") or row.get("data_importacao")
+        endereco = (
+            f"{row.get('tipo_logradouro') or ''} "
+            f"{row.get('numero') or ''}, "
+            f"{row.get('bairro') or ''}, "
+            f"{row.get('cidade') or ''}"
+        ).strip(" ,")
 
-        # determinar status: se existe coluna 'entregue' (boolean) do SELECT ou se existe registro na tabela entregas
-        entregue_flag = False
-        if isinstance(row.get("entregue"), bool):
-            entregue_flag = row.get("entregue")
-        elif str(row.get("entregue") or "").lower() in ("t", "true", "1"):
-            entregue_flag = True
+        coordenadas = row.get("coordenadas")
+        tem_coords = coordenadas is not None and str(coordenadas).strip() != ""
+        entregou = bool(row.get("entregue"))
 
-        status_text = "ENTREGUE" if entregue_flag else ((row.get("status") or "").upper() or "PENDENTE")
+        if entregou:
+            status = "ENTREGUE"
+        elif tem_coords:
+            status = "COMPLETO"
+        else:
+            status = "INCOMPLETO"
 
         return {
-            "id": row.get("id"),
-            "numero_pedido": numero,
-            "cliente": cliente_nome,
-            "endereco": endereco,
-            "data_nota": _format_data(data_nota),
-            "status": status_text,
+            "id": row.get("n_nota"),
+            "numero_pedido": row.get("n_nota"),
+            "cliente": row.get("nome_cliente"),
+            "endereco": endereco or "-",
+            "data_nota": format_data(row.get("dt_nota")),
+            "status": status,
             "_orig": row,
         }
 
+    # -----------------------------------------------------
+    # Contar total para paginação
+    # -----------------------------------------------------
     def contar_pedidos(self, filtros: Optional[Dict[str, Any]] = None) -> int:
-        if not self.banco:
-            return len(self._pedidos_demo)
         where_sql, params = self._build_filtros_sql(filtros)
-        query = "SELECT COUNT(1) AS total FROM pedidos_importados p" + where_sql + ";"
+        query = f"""
+            SELECT COUNT(*) AS total
+            FROM PEDIDO p
+            LEFT JOIN ENDERECO_CLIENTE ec ON ec.id_endereco = p.id_endereco
+            {where_sql};
+        """
         rows = self._execute_select(query, tuple(params))
-        if rows and "total" in rows[0]:
-            return int(rows[0]["total"])
-        # tentar outras chaves se o wrapper devolver outro formato
-        if rows and len(rows) > 0:
-            first = rows[0]
-            v = list(first.values())[0]
-            return int(v)
-        return 0
+        return int(rows[0]["total"]) if rows else 0
 
-    def listar_pedidos(self, pagina: int = 1, filtros: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """
-        Retorna:
-        {
-            "pedidos": [ ... ],
-            "pagina": pagina,
-            "total_paginas": total_paginas,
-            "total_registros": total_registros
-        }
-        """
+    # -----------------------------------------------------
+    # Listar pedidos
+    # -----------------------------------------------------
+    def listar_pedidos(self, pagina: int = 1, filtros: Optional[Dict[str, Any]] = None):
         if pagina < 1:
             pagina = 1
 
-        if not self.banco:
-            total = len(self._pedidos_demo)
-            total_paginas = math.ceil(total / self.por_pagina) if total else 1
-            start = (pagina - 1) * self.por_pagina
-            end = start + self.por_pagina
-            subset = self._pedidos_demo[start:end]
-            pedidos_mapeados = [self._map_pedido_para_template(r) for r in subset]
-            return {
-                "pedidos": pedidos_mapeados,
-                "pagina": pagina,
-                "total_paginas": total_paginas,
-                "total_registros": total,
-            }
-
         where_sql, params = self._build_filtros_sql(filtros)
-        # Selecionar campos (ajuste conforme seu schema) - incluir cálculo de 'entregue'
-        query = (
-            "SELECT p.id, p.numero_pedido, p.cliente_id, c.nome AS cliente_nome, "
-            "p.data_importacao, p.data_nota, p.status, p.peso, p.endereco_entrega, p.observacoes, "
-            "EXISTS (SELECT 1 FROM entregas e WHERE e.pedido_id = p.id) AS entregue "
-            "FROM pedidos_importados p "
-            "LEFT JOIN cliente c ON c.id = p.cliente_id "
-            + where_sql +
-            " ORDER BY p.data_nota DESC NULLS LAST, p.data_importacao DESC, p.id DESC "
-            "LIMIT %s OFFSET %s;"
-        )
-        # calcular paginação
-        offset = (pagina - 1) * self.por_pagina
-        params_for_query = (params or []) + [self.por_pagina, offset]
-        rows = self._execute_select(query, tuple(params_for_query)) or []
+        itens_por_pagina = filtros.get("itens_por_pagina", self.por_pagina)
+        offset = (pagina - 1) * itens_por_pagina
+
+
+        query = f"""
+            SELECT
+                p.n_nota,
+                p.dt_nota,
+                p.id_cliente,
+                c.nome_cliente,
+                ec.cidade,
+                ec.bairro,
+                ec.tipo_logradouro,
+                ec.numero,
+                ec.coordenadas,
+                EXISTS (SELECT 1 FROM ENTREGA e WHERE e.pedido_n_nota = p.n_nota) AS entregue
+            FROM PEDIDO p
+            LEFT JOIN CLIENTE c ON c.id_cliente = p.id_cliente
+            LEFT JOIN ENDERECO_CLIENTE ec ON ec.id_endereco = p.id_endereco
+            {where_sql}
+            ORDER BY p.dt_nota DESC NULLS LAST, p.n_nota DESC
+            LIMIT %s OFFSET %s;
+        """
+
+        params = (params or []) + [itens_por_pagina, offset]
+        rows = self._execute_select(query, tuple(params))
 
         total = self.contar_pedidos(filtros)
-        total_paginas = math.ceil(total / self.por_pagina) if total else 1
-        pedidos_mapeados = [self._map_pedido_para_template(r) for r in rows]
+        total_paginas = max(math.ceil(total / itens_por_pagina), 1)
+
+        pedidos = [self._map_pedido(r) for r in rows]
+
         return {
-            "pedidos": pedidos_mapeados,
+            "pedidos": pedidos,
             "pagina": pagina,
             "total_paginas": total_paginas,
             "total_registros": total,
         }
 
-    def buscar_pedido_por_id(self, pedido_id: int) -> Optional[Dict[str, Any]]:
-        if not self.banco:
-            for p in self._pedidos_demo:
-                if p["id"] == int(pedido_id):
-                    return p
-            return None
-        query = (
-            "SELECT p.id, p.numero_pedido, p.cliente_id, c.nome AS cliente_nome, "
-            "p.data_importacao, p.data_nota, p.status, p.peso, p.endereco_entrega, p.observacoes "
-            "FROM pedidos_importados p "
-            "LEFT JOIN cliente c ON c.id = p.cliente_id "
-            "WHERE p.id = %s LIMIT 1;"
-        )
-        rows = self._execute_select(query, (int(pedido_id),))
+    # -----------------------------------------------------
+    # Buscar pedido para detalhes
+    # -----------------------------------------------------
+    def buscar_pedido_por_id(self, pedido_id: int):
+        query = """
+            SELECT
+                p.n_nota,
+                p.dt_nota,
+                p.id_cliente,
+                c.nome_cliente,
+                ec.cidade,
+                ec.bairro,
+                ec.tipo_logradouro,
+                ec.numero,
+                ec.coordenadas,
+                EXISTS (SELECT 1 FROM ENTREGA e WHERE e.pedido_n_nota = p.n_nota) AS entregue
+            FROM PEDIDO p
+            LEFT JOIN CLIENTE c ON c.id_cliente = p.id_cliente
+            LEFT JOIN ENDERECO_CLIENTE ec ON ec.id_endereco = p.id_endereco
+            WHERE p.n_nota = %s
+            LIMIT 1;
+        """
+        rows = self._execute_select(query, (pedido_id,))
         return rows[0] if rows else None
 
-    # Opcional: método para atualizar status/entrega (pode ser usado pelo controller)
-    def atualizar_status(self, pedido_id: int, novo_status: str) -> Tuple[bool, str]:
-        if not self.banco:
-            for p in self._pedidos_demo:
-                if p["id"] == int(pedido_id):
-                    p["status"] = novo_status
-                    return True, "Status atualizado (modo local)."
-            return False, "Pedido não encontrado (modo local)."
-        # Executar update parametizado
-        try:
-            # tentar usar método de execução do wrapper
-            if hasattr(self.banco, "executar_comando"):
-                self.banco.executar_comando("UPDATE pedidos_importados SET status = %s WHERE id = %s;", (novo_status, int(pedido_id)))
-                return True, "Status atualizado."
-            # fallback para conexão raw
-            conn = getattr(self.banco, "conn", None) or getattr(self.banco, "connection", None) or None
-            if conn:
-                cur = conn.cursor()
-                cur.execute("UPDATE pedidos_importados SET status = %s WHERE id = %s;", (novo_status, int(pedido_id)))
-                conn.commit()
-                cur.close()
-                return True, "Status atualizado."
-        except Exception as e:
-            return False, f"Erro ao atualizar status: {e}"
-        return False, "Não foi possível atualizar status: interface do banco desconhecida."
+    # -----------------------------------------------------
+    # Buscar itens do pedido  **(AGORA DENTRO DA CLASSE)**
+    # -----------------------------------------------------
+    def buscar_itens_pedido(self, n_nota: int):
+        query = """
+            SELECT
+                pp.produto_id_produto,
+                p.nome_produto,
+                p.classificacao,
+                pp.quant_pedido
+            FROM PRODUTO_PEDIDO pp
+            LEFT JOIN PRODUTO p ON p.id_produto = pp.produto_id_produto
+            WHERE pp.pedido_n_nota = %s;
+        """
+        itens = self._execute_select(query, (n_nota,))
+
+        # Tratamento da classificação
+        for item in itens:
+            if item.get("classificacao") == 2:
+                item["classificacao_texto"] = "Agrotóxico"
+            else:
+                item["classificacao_texto"] = "Normal"
+
+        return itens
+

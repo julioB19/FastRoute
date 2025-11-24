@@ -13,6 +13,9 @@
 
     <!-- filtros -->
     <form method="get" action="{{ url_for('pedidos_importados') }}" class="row g-3 mb-3">
+
+        <input type="hidden" name="pagina" value="1">
+
         <div class="col-md-3">
             <label class="form-label">Filtro</label>
             <select class="form-select" name="filtro">
@@ -28,13 +31,23 @@
             <input type="date" class="form-control" name="data_nota" value="{{ data_nota }}">
         </div>
 
+        <div class="col-md-2">
+            <label class="form-label">Itens por página</label>
+            <select class="form-select" name="itens" onchange="this.form.submit()">
+                <option value="20" {% if itens_por_pagina == 20 %}selected{% endif %}>20</option>
+                <option value="50" {% if itens_por_pagina == 50 %}selected{% endif %}>50</option>
+                <option value="100" {% if itens_por_pagina == 100 %}selected{% endif %}>100</option>
+            </select>
+        </div>
+
         <div class="col-md-3 d-flex align-items-end">
             <button class="btn btn-cotri">Aplicar</button>
             <a href="{{ url_for('pedidos_importados') }}" class="btn btn-outline-secondary ms-2">Limpar</a>
         </div>
+
     </form>
 
-    <!-- tabela enxuta: Nº da Nota, Cliente, Endereço, Data da Nota, Status, Ações -->
+    <!-- tabela -->
     <div class="card shadow-sm">
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -44,7 +57,7 @@
                             <th>Nº da Nota</th>
                             <th>Cliente</th>
                             <th>Endereço</th>
-                            <th>Data da Nota</th>
+                            <th>Data</th>
                             <th>Status</th>
                             <th>Ações</th>
                         </tr>
@@ -57,9 +70,24 @@
                                     <td>{{ p.cliente }}</td>
                                     <td>{{ p.endereco }}</td>
                                     <td>{{ p.data_nota or '-' }}</td>
-                                    <td>{{ p.status or '-' }}</td>
+
                                     <td>
-                                        <a href="{{ url_for('detalhar_pedido', n_nota=p.id) }}" class="btn btn-sm btn-outline-primary">Detalhes</a>
+                                        {% if p.status == 'COMPLETO' %}
+                                            <span class="badge bg-success">Completo</span>
+                                        {% elif p.status == 'INCOMPLETO' %}
+                                            <span class="badge bg-danger">Incompleto</span>
+                                        {% elif p.status == 'ENTREGUE' %}
+                                            <span class="badge bg-primary">Entregue</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">-</span>
+                                        {% endif %}
+                                    </td>
+
+                                    <td>
+                                        <button onclick="abrirDetalhes({{ p.id }})"
+                                                class="btn btn-sm btn-warning text-dark">
+                                            Detalhes
+                                        </button>
                                     </td>
                                 </tr>
                             {% endfor %}
@@ -70,11 +98,126 @@
                         {% endif %}
                     </tbody>
                 </table>
+
+                <!-- PAGINAÇÃO SIMPLIFICADA -->
+                {% if total_paginas > 1 %}
+                <nav class="mt-3">
+                    <ul class="pagination justify-content-center">
+
+                        {% set args_base = request.args.to_dict() %}
+                        {% set _ = args_base.pop('pagina', None) %}
+
+                        <!-- Botão Anterior -->
+                        <li class="page-item {% if pagina <= 1 %}disabled{% endif %}">
+                            <a class="page-link"
+                            href="{{ url_for('pedidos_importados', pagina=pagina-1, **args_base) }}">
+                                « Anterior
+                            </a>
+                        </li>
+
+                        <!-- Página Atual -->
+                        <li class="page-item active">
+                            <span class="page-link">
+                                Página {{ pagina }} / {{ total_paginas }}
+                            </span>
+                        </li>
+
+                        <!-- Botão Próxima -->
+                        <li class="page-item {% if pagina >= total_paginas %}disabled{% endif %}">
+                            <a class="page-link"
+                            href="{{ url_for('pedidos_importados', pagina=pagina+1, **args_base) }}">
+                                Próxima »
+                            </a>
+                        </li>
+
+                    </ul>
+
+                    <!-- Botão Ir para Última Página -->
+                    <div class="text-center">
+                        <a class="btn btn-outline-primary mt-2"
+                        href="{{ url_for('pedidos_importados', pagina=total_paginas, **args_base) }}">
+                            Ir para última página ({{ total_paginas }})
+                        </a>
+                    </div>
+                </nav>
+                {% endif %}
             </div>
         </div>
     </div>
-
 </div>
 
-<script src="{{ url_for('static', filename='js/pedidos_importados.js') }}"></script>
+
+<!-- Modal de detalhes -->
+<div class="modal fade" id="modalDetalhesPedido" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+
+      <div class="modal-header bg-warning">
+        <h5 class="modal-title">Detalhes do Pedido</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body" id="conteudo-detalhes">
+        Carregando...
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+window.abrirDetalhes = async function(nnota) {
+    const modal = new bootstrap.Modal('#modalDetalhesPedido');
+    const conteudo = document.getElementById("conteudo-detalhes");
+    conteudo.innerHTML = "Carregando...";
+
+    try {
+        const resp = await fetch(`/detalhar_pedido/${nnota}`);
+        const dados = await resp.json();
+
+        let html = `
+            <h5>Pedido nº ${dados.pedido.n_nota}</h5>
+            <p><strong>Cliente:</strong> ${dados.pedido.nome_cliente || '-'}</p>
+            <hr />
+            <h6>Itens</h6>
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Produto</th>
+                        <th>Classificação</th>
+                        <th>Qtd</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        for (const it of dados.itens) {
+            const cls = it.classificacao == 2
+                ? "<span class='badge bg-danger'>Agrotóxico</span>"
+                : "<span class='badge bg-success'>Normal</span>";
+
+            html += `
+                <tr>
+                    <td>${it.nome_produto}</td>
+                    <td>${cls}</td>
+                    <td>${it.quant_pedido}</td>
+                </tr>
+            `;
+        }
+
+        html += "</tbody></table>";
+        conteudo.innerHTML = html;
+        modal.show();
+
+    } catch (e) {
+        conteudo.innerHTML = "<span class='text-danger'>Erro ao carregar.</span>";
+        modal.show();
+    }
+};
+</script>
+
 {% endblock %}
