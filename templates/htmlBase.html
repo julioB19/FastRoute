@@ -226,9 +226,7 @@
             <button id="toggleSidebar" class="btn btn-dark p-2">
                 <i class="bi bi-list"></i>
             </button>
-            <h4 class="text-white">FastRoute
-                <img src="{{ url_for('static', filename='images/iconeFastRouteBranco.png') }}" alt="Icone" class="ms-auto" style="width: 90px; height: 40px; justify-content: left;">
-            </h4>
+            <h4 class="text-white">Bom Trabalho!</h4>
         </div>
 
         <nav class="sidebar text-white" >
@@ -260,22 +258,31 @@
                     </a>
                 </li>
                 {% endif %}
-                <li class="nav-item">
-                    <a href="{{ url_for('realizar_logout') }}" class="nav-link">
-                        <i class="bi-box-arrow-left"></i> <span>Sair</span>
-                    </a>
-                </li>
             </ul>
+            <div class="text-center mt-4">
+                <img src="{{ url_for('static', filename='images/iconeFastRouteBranco.png') }}"
+                    alt="FastRoute Logo"
+                    style="width: 110px; opacity: 0.9;">
+                <h5 class="text-white mt-2" style="letter-spacing: 1px;">FastRoute</h5>
+            </div>
         </nav>
-        <div class="sidebar-user">
-            <div class="user-avatar">
-                <i class="bi bi-person-fill"></i>
+        <div class="sidebar-user d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+                <div class="user-avatar">
+                    <i class="bi bi-person-fill"></i>
+                </div>
+                <div>
+                    <div class="user-label">Usuário</div>
+                    <div class="user-name">{{ usuario or 'Visitante' }}</div>
+                </div>
             </div>
-            <div>
-                <div class="user-label">Usuário</div>
-                <div class="user-name">{{ usuario or 'Visitante' }}</div>
-            </div>
+
+            <a href="{{ url_for('realizar_logout') }}" class="btn btn-sm btn-light text-dark" 
+            style="border-radius: 8px; padding: 4px 8px;">
+                <i class="bi bi-box-arrow-right"></i>
+            </a>
         </div>
+
     </div>
 
     <main id="mainContent" class="main-content">
