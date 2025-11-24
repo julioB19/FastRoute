@@ -260,19 +260,27 @@ def excluir_usuario(usuario_id):
 @login_obrigatorio
 def pedidos_importados():
     pagina = request.args.get('pagina', default=1, type=int)
+    filtro = request.args.get('filtro', default='todos')
+    data_nota = request.args.get('data_nota', default='').strip()
+
     filtros = {}
     cliente_id = request.args.get('cliente_id')
-    status = request.args.get('status')
-    data_inicio = request.args.get('data_inicio')
-    data_fim = request.args.get('data_fim')
     if cliente_id:
         filtros['cliente_id'] = cliente_id
-    if status:
-        filtros['status'] = status
-    if data_inicio:
-        filtros['data_inicio'] = data_inicio
-    if data_fim:
-        filtros['data_fim'] = data_fim
+
+    # mapear seleção do template para filtros
+    if filtro == 'completos':
+        filtros['coords_not_null'] = True
+    elif filtro == 'incompletos':
+        filtros['coords_null'] = True
+    elif filtro == 'entregue':
+        filtros['entregue'] = True
+    # 'todos' não adiciona filtros
+
+    # aplicar filtro por data da nota se informado
+    if data_nota:
+        filtros['data_inicio'] = data_nota
+        filtros['data_fim'] = data_nota
 
     pag = servico_pedidos.listar_pedidos(pagina, filtros)
     clientes = servico_pedidos.buscar_clientes()
@@ -284,9 +292,10 @@ def pedidos_importados():
                                pagina=pag.get('pagina'),
                                total_paginas=pag.get('total_paginas'),
                                total_registros=pag.get('total_registros'),
-                               clientes=clientes)
+                               clientes=clientes,
+                               filtro=filtro,
+                               data_nota=data_nota)
     except TemplateNotFound:
-        # fallback para exibir no home caso o template não exista
         return render_template('home.html',
                                usuario=session.get('usuario_nome'),
                                pedidos=pag.get('pedidos'),

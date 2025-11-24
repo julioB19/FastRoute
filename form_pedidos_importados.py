@@ -98,8 +98,13 @@ class ServicoPedidosImportados:
 
     def _build_filtros_sql(self, filtros: Optional[Dict[str, Any]]) -> Tuple[str, List[Any]]:
         """
-        Agora os filtros de data aplicam-se à data da nota (data_nota).
-        Aceita chaves: cliente_id, status, data_inicio, data_fim
+        Aceita chaves no dict filtros:
+          - cliente_id
+          - status (valor textual)
+          - data_inicio / data_fim (aplicados em p.data_nota)
+          - coords_not_null (True) => registros com coordenadas
+          - coords_null (True) => registros sem coordenadas
+          - entregue (True) => existe registro em entregas vinculando o pedido
         """
         where_parts = []
         params: List[Any] = []
@@ -111,13 +116,33 @@ class ServicoPedidosImportados:
         if filtros.get("status"):
             where_parts.append("p.status = %s")
             params.append(filtros["status"])
-        # filtros de data agora usam p.data_nota (data da nota)
+        # filtros de data aplicam-se à data da nota (data_nota)
         if filtros.get("data_inicio"):
             where_parts.append("p.data_nota >= %s")
             params.append(filtros["data_inicio"])
         if filtros.get("data_fim"):
             where_parts.append("p.data_nota <= %s")
             params.append(filtros["data_fim"])
+
+        # coordenadas: tentar vários nomes de colunas possíveis
+        coords_checks = [
+            "(p.endereco_lat IS NOT NULL AND p.endereco_lng IS NOT NULL)",
+            "(p.latitude IS NOT NULL AND p.longitude IS NOT NULL)",
+            "(p.lat IS NOT NULL AND p.lon IS NOT NULL)",
+            "(p.lat IS NOT NULL AND p.lng IS NOT NULL)",
+            "(p.coordenadas IS NOT NULL)"  # caso haja JSON/texto
+        ]
+        if filtros.get("coords_not_null"):
+            where_parts.append("(" + " OR ".join(coords_checks) + ")")
+        if filtros.get("coords_null"):
+            # todos os checks devem ser null -> negar cada check
+            neg_checks = ["NOT " + c for c in coords_checks]
+            where_parts.append("(" + " AND ".join(neg_checks) + ")")
+
+        # entregue: existe registro na tabela entregas vinculando o pedido
+        if filtros.get("entregue"):
+            where_parts.append("EXISTS (SELECT 1 FROM entregas e WHERE e.pedido_id = p.id)")
+
         if where_parts:
             return " WHERE " + " AND ".join(where_parts), params
         return "", params
@@ -134,31 +159,28 @@ class ServicoPedidosImportados:
             except Exception:
                 return str(v)
 
-        cliente_nome = row.get("cliente_nome") or row.get("cliente") or row.get("cliente_nome")
-        endereco = row.get("endereco") or row.get("endereco_entrega") or row.get("observacoes") or ""
-        # tentar extrair cidade do endereço (se presente como "rua, cidade, nº")
-        cidade = ""
-        try:
-            if endereco and "," in endereco:
-                parts = [p.strip() for p in endereco.split(",")]
-                if len(parts) >= 2:
-                    cidade = parts[1]
-        except Exception:
-            cidade = ""
-
-        status = (row.get("status") or "").upper()
-        completo = bool(row.get("completo")) or (status in ("ENTREGUE", "COMPLETO", "OK"))
-
-        # usar data_nota (data da nota) como data exibida na coluna (substitui data_prevista)
+        numero = row.get("numero_pedido") or row.get("n_nota") or row.get("nota") or str(row.get("id") or "")
+        cliente_nome = row.get("cliente_nome") or row.get("cliente") or ""
+        endereco = row.get("endereco_entrega") or row.get("endereco") or row.get("observacoes") or ""
+        # usar data_nota (data da nota) como campo principal
         data_nota = row.get("data_nota") or row.get("data_emissao") or row.get("data_importacao")
+
+        # determinar status: se existe coluna 'entregue' (boolean) do SELECT ou se existe registro na tabela entregas
+        entregue_flag = False
+        if isinstance(row.get("entregue"), bool):
+            entregue_flag = row.get("entregue")
+        elif str(row.get("entregue") or "").lower() in ("t", "true", "1"):
+            entregue_flag = True
+
+        status_text = "ENTREGUE" if entregue_flag else ((row.get("status") or "").upper() or "PENDENTE")
 
         return {
             "id": row.get("id"),
+            "numero_pedido": numero,
             "cliente": cliente_nome,
-            "cidade": cidade,
             "endereco": endereco,
-            "data_prevista": _format_data(data_nota),  # campo do template mantém nome data_prevista
-            "completo": completo,
+            "data_nota": _format_data(data_nota),
+            "status": status_text,
             "_orig": row,
         }
 
@@ -205,10 +227,11 @@ class ServicoPedidosImportados:
             }
 
         where_sql, params = self._build_filtros_sql(filtros)
-        # Selecionar campos (ajuste conforme seu schema) - incluir data_nota (data da nota)
+        # Selecionar campos (ajuste conforme seu schema) - incluir cálculo de 'entregue'
         query = (
             "SELECT p.id, p.numero_pedido, p.cliente_id, c.nome AS cliente_nome, "
-            "p.data_importacao, p.data_nota, p.status, p.peso, p.endereco_entrega, p.observacoes "
+            "p.data_importacao, p.data_nota, p.status, p.peso, p.endereco_entrega, p.observacoes, "
+            "EXISTS (SELECT 1 FROM entregas e WHERE e.pedido_id = p.id) AS entregue "
             "FROM pedidos_importados p "
             "LEFT JOIN cliente c ON c.id = p.cliente_id "
             + where_sql +

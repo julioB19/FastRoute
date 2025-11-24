@@ -168,3 +168,56 @@ document.addEventListener("DOMContentLoaded", function () {
             });
     }
 });
+// ======================================================
+// OVERLAY DO MAPA EXPANDIDO
+// ======================================================
+document.addEventListener("DOMContentLoaded", function () {
+
+    const miniMapa = document.getElementById("miniMapa");
+    const overlay = document.getElementById("overlayMapa");
+    const fechar = document.getElementById("fecharOverlayMapa");
+    let mapaExpandido = null;
+
+    // Ao clicar no minimapa → abrir overlay
+    miniMapa.addEventListener("click", () => {
+        overlay.style.display = "flex";
+
+        setTimeout(() => {
+            if (mapaExpandido === null) {
+                mapaExpandido = L.map("mapaExpandido").setView([-27.358885, -53.398043], 12);
+
+                L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19
+                }).addTo(mapaExpandido);
+
+                // Carregar pedidos pendentes
+                fetch('/entregas-pendentes')
+                    .then(res => res.json())
+                    .then(marcadores => {
+                        const bounds = [];
+
+                        marcadores.forEach(m => {
+                            if (!m.lat || !m.lng) return;
+
+                            const marker = L.marker([m.lat, m.lng]).addTo(mapaExpandido);
+                            marker.bindPopup(m.n_nota ? `Pedido ${m.n_nota}` : 'Entrega pendente');
+
+                            bounds.push([m.lat, m.lng]);
+                        });
+
+                        if (bounds.length > 0) {
+                            mapaExpandido.fitBounds(bounds, { padding: [30, 30] });
+                        }
+                    });
+            } else {
+                mapaExpandido.invalidateSize();
+            }
+
+        }, 200);
+    });
+
+    // Fechar overlay
+    fechar.addEventListener("click", () => {
+        overlay.style.display = "none";
+    });
+});

@@ -19,12 +19,13 @@
                 <option value="todos" {% if filtro == 'todos' %}selected{% endif %}>Todos</option>
                 <option value="completos" {% if filtro == 'completos' %}selected{% endif %}>Completos</option>
                 <option value="incompletos" {% if filtro == 'incompletos' %}selected{% endif %}>Incompletos</option>
+                <option value="entregue" {% if filtro == 'entregue' %}selected{% endif %}>Entregue</option>
             </select>
         </div>
 
         <div class="col-md-3">
-            <label class="form-label">Data Prevista</label>
-            <input type="date" class="form-control" name="data_prevista" value="{{ data_prevista }}">
+            <label class="form-label">Data da Nota</label>
+            <input type="date" class="form-control" name="data_nota" value="{{ data_nota }}">
         </div>
 
         <div class="col-md-3 d-flex align-items-end">
@@ -33,17 +34,17 @@
         </div>
     </form>
 
+    <!-- tabela enxuta: Nº da Nota, Cliente, Endereço, Data da Nota, Status, Ações -->
     <div class="card shadow-sm">
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th>Nota</th>
+                            <th>Nº da Nota</th>
                             <th>Cliente</th>
-                            <th>Cidade</th>
                             <th>Endereço</th>
-                            <th>Data Prevista</th>
+                            <th>Data da Nota</th>
                             <th>Status</th>
                             <th>Ações</th>
                         </tr>
@@ -52,18 +53,11 @@
                         {% if pedidos %}
                             {% for p in pedidos %}
                                 <tr>
-                                    <td>{{ p.id }}</td>
+                                    <td>{{ p.numero_pedido }}</td>
                                     <td>{{ p.cliente }}</td>
-                                    <td>{{ p.cidade }}</td>
                                     <td>{{ p.endereco }}</td>
-                                    <td>{{ p.data_prevista or '-' }}</td>
-                                    <td>
-                                        {% if p.completo %}
-                                            <span class="badge bg-success">Completo</span>
-                                        {% else %}
-                                            <span class="badge bg-danger">Incompleto</span>
-                                        {% endif %}
-                                    </td>
+                                    <td>{{ p.data_nota or '-' }}</td>
+                                    <td>{{ p.status or '-' }}</td>
                                     <td>
                                         <a href="{{ url_for('detalhar_pedido', n_nota=p.id) }}" class="btn btn-sm btn-outline-primary">Detalhes</a>
                                     </td>
@@ -71,7 +65,7 @@
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="7" class="text-center py-4">Nenhum pedido encontrado.</td>
+                                <td colspan="6" class="text-center py-4">Nenhum pedido encontrado.</td>
                             </tr>
                         {% endif %}
                     </tbody>
