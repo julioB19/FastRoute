@@ -47,7 +47,24 @@ document.addEventListener('DOMContentLoaded', function() {
     const barraContainer = document.getElementById('barraProgressoContainer');
     const barra = document.getElementById('barraProgresso');
     const botao = document.getElementById('btnImportar');
+    const arquivoInput = document.getElementById('arquivo');
     let intervalo;
+    let aguardandoArquivo = false;
+
+    botao.addEventListener('click', function (e) {
+        if (!arquivoInput.files || arquivoInput.files.length === 0) {
+            e.preventDefault();
+            aguardandoArquivo = true;
+            arquivoInput.click();
+        }
+    });
+
+    arquivoInput.addEventListener('change', function () {
+        if (aguardandoArquivo && arquivoInput.files.length > 0) {
+            aguardandoArquivo = false;
+            form.requestSubmit();
+        }
+    });
 
     form.addEventListener('submit', function() {
         botao.disabled = true;
