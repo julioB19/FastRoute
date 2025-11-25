@@ -20,6 +20,9 @@ class ServicoImportacao:
 
             with self.banco.obter_cursor() as (conn, cursor):
                 total_processadas = 0
+                clientes_cache = set()
+                produtos_cache = set()
+                enderecos_cache = {}
 
                 for index, row in enumerate(df.itertuples(index=False), start=1):
                     # Evita perder as linhas ja persistidas em caso de erro de formato
@@ -27,74 +30,91 @@ class ServicoImportacao:
                         id_cliente = row.NfForCod
                         nome_cliente = f"Cliente {id_cliente}"
 
-                        cursor.execute(
-                            """
-                            INSERT INTO CLIENTE (id_cliente, nome_cliente)
-                            VALUES (%s, %s)
-                            ON CONFLICT (id_cliente) DO UPDATE
-                            SET nome_cliente = EXCLUDED.nome_cliente;
-                            """,
-                            (id_cliente, nome_cliente),
-                        )
+                        if id_cliente not in clientes_cache:
+                            cursor.execute(
+                                """
+                                INSERT INTO CLIENTE (id_cliente, nome_cliente)
+                                VALUES (%s, %s)
+                                ON CONFLICT (id_cliente) DO UPDATE
+                                SET nome_cliente = EXCLUDED.nome_cliente;
+                                """,
+                                (id_cliente, nome_cliente),
+                            )
+                            clientes_cache.add(id_cliente)
 
                         numero = str(row.TraNumEnd) if pd.notna(row.TraNumEnd) else None
                         complemento = row.TraComplemento if pd.notna(row.TraComplemento) else None
-
-                        cursor.execute(
-                            """
-                            SELECT id_endereco
-                            FROM ENDERECO_CLIENTE
-                            WHERE id_cliente = %s
-                              AND cidade = %s
-                              AND bairro = %s
-                              AND tipo_logradouro = %s
-                              AND COALESCE(numero, '') = COALESCE(%s, '')
-                              AND COALESCE(complemento, '') = COALESCE(%s, '')
-                            LIMIT 1;
-                            """,
-                            (id_cliente, row.MunNom, row.TraBairro, row.TraEnd, numero, complemento),
+                        endereco_chave = (
+                            id_cliente,
+                            row.MunNom,
+                            row.TraBairro,
+                            row.TraEnd,
+                            numero or "",
+                            complemento or "",
                         )
-                        endereco_existente = cursor.fetchone()
 
-                        if endereco_existente:
-                            id_endereco = endereco_existente[0]
+                        if endereco_chave in enderecos_cache:
+                            id_endereco = enderecos_cache[endereco_chave]
                         else:
                             cursor.execute(
                                 """
-                                INSERT INTO ENDERECO_CLIENTE (id_cliente, cidade, bairro, tipo_logradouro, numero, complemento)
-                                VALUES (%s, %s, %s, %s, %s, %s)
-                                RETURNING id_endereco;
+                                SELECT id_endereco
+                                FROM ENDERECO_CLIENTE
+                                WHERE id_cliente = %s
+                                  AND cidade = %s
+                                  AND bairro = %s
+                                  AND tipo_logradouro = %s
+                                  AND COALESCE(numero, '') = COALESCE(%s, '')
+                                  AND COALESCE(complemento, '') = COALESCE(%s, '')
+                                LIMIT 1;
                                 """,
-                                (
-                                    id_cliente,
-                                    row.MunNom,
-                                    row.TraBairro,
-                                    row.TraEnd,
-                                    numero,
-                                    complemento,
-                                ),
+                                (id_cliente, row.MunNom, row.TraBairro, row.TraEnd, numero, complemento),
                             )
-                            id_endereco = cursor.fetchone()[0]
+                            endereco_existente = cursor.fetchone()
+
+                            if endereco_existente:
+                                id_endereco = endereco_existente[0]
+                            else:
+                                cursor.execute(
+                                    """
+                                    INSERT INTO ENDERECO_CLIENTE (id_cliente, cidade, bairro, tipo_logradouro, numero, complemento)
+                                    VALUES (%s, %s, %s, %s, %s, %s)
+                                    RETURNING id_endereco;
+                                    """,
+                                    (
+                                        id_cliente,
+                                        row.MunNom,
+                                        row.TraBairro,
+                                        row.TraEnd,
+                                        numero,
+                                        complemento,
+                                    ),
+                                )
+                                id_endereco = cursor.fetchone()[0]
+
+                            enderecos_cache[endereco_chave] = id_endereco
 
                         if row.ItemProCod:
                             fam = int(float(row.ProFamCod)) if pd.notna(row.ProFamCod) else None
                             grp = int(float(row.ProGrpCod)) if pd.notna(row.ProGrpCod) else None
                             classificacao = 2 if fam == 2 and grp == 11 else 1
 
-                            cursor.execute(
-                                """
-                                INSERT INTO PRODUTO (id_produto, nome_produto, classificacao)
-                                VALUES (%s, %s, %s)
-                                ON CONFLICT (id_produto) DO UPDATE
-                                SET nome_produto = EXCLUDED.nome_produto,
-                                    classificacao = EXCLUDED.classificacao;
-                                """,
-                                (
-                                    row.ItemProCod,
-                                    getattr(row, 'ProNom', 'Produto sem nome'),
-                                    classificacao,
-                                ),
-                            )
+                            if row.ItemProCod not in produtos_cache:
+                                cursor.execute(
+                                    """
+                                    INSERT INTO PRODUTO (id_produto, nome_produto, classificacao)
+                                    VALUES (%s, %s, %s)
+                                    ON CONFLICT (id_produto) DO UPDATE
+                                    SET nome_produto = EXCLUDED.nome_produto,
+                                        classificacao = EXCLUDED.classificacao;
+                                    """,
+                                    (
+                                        row.ItemProCod,
+                                        getattr(row, 'ProNom', 'Produto sem nome'),
+                                        classificacao,
+                                    ),
+                                )
+                                produtos_cache.add(row.ItemProCod)
 
                         cursor.execute(
                             """
