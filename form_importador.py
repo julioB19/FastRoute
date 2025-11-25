@@ -23,7 +23,7 @@ class ServicoImportacao:
             if "Coord" not in df.columns and "coord" not in df.columns:
                 return False, "Erro: coluna 'Coord' não encontrada no CSV."
 
-            # unifica o nome
+            # unifica o nome para evitar problemas com maiúsculas/minúsculas
             if "Coord" in df.columns:
                 df.rename(columns={"Coord": "coord"}, inplace=True)
 
@@ -60,9 +60,7 @@ class ServicoImportacao:
                         # ------------------------------------------------------------
                         # ENDEREÇO + COORDENADAS
                         # ------------------------------------------------------------
-                        numero = str(row.TraNumEnd) if pd.notna(row.TraNumEnd) else None
-                        complemento = row.TraComplemento if pd.notna(row.TraComplemento) else None
-                        coordenadas = getattr(row, "coord", None)
+                        coordenadas = getattr(row, 'coord', None)
 
                         cursor.execute(
                             """
@@ -84,9 +82,9 @@ class ServicoImportacao:
                                 row.MunNom,
                                 row.TraBairro,
                                 row.TraEnd,
-                                numero,
-                                complemento,
-                                coordenadas
+                                str(row.TraNumEnd) if pd.notna(row.TraNumEnd) else None,
+                                row.TraComplemento,
+                                coordenadas,
                             ),
                         )
 
@@ -96,11 +94,11 @@ class ServicoImportacao:
                             SELECT id_endereco
                             FROM ENDERECO_CLIENTE
                             WHERE id_cliente = %s
-                              AND cidade = %s
-                              AND bairro = %s
-                              AND tipo_logradouro = %s
-                              AND COALESCE(numero, '') = COALESCE(%s, '')
-                              AND COALESCE(complemento, '') = COALESCE(%s, '')
+                            AND cidade = %s
+                            AND bairro = %s
+                            AND tipo_logradouro = %s
+                            AND COALESCE(numero, '') = COALESCE(%s, '')
+                            AND COALESCE(complemento, '') = COALESCE(%s, '')
                             LIMIT 1;
                             """,
                             (id_cliente, row.MunNom, row.TraBairro, row.TraEnd, numero, complemento),
@@ -112,10 +110,8 @@ class ServicoImportacao:
                         else:
                             cursor.execute(
                                 """
-                                INSERT INTO ENDERECO_CLIENTE (
-                                    id_cliente, cidade, bairro, tipo_logradouro, numero, complemento, coordenadas
-                                )
-                                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                INSERT INTO ENDERECO_CLIENTE (id_cliente, cidade, bairro, tipo_logradouro, numero, complemento)
+                                VALUES (%s, %s, %s, %s, %s, %s)
                                 RETURNING id_endereco;
                                 """,
                                 (
@@ -125,7 +121,6 @@ class ServicoImportacao:
                                     row.TraEnd,
                                     numero,
                                     complemento,
-                                    coordenadas
                                 ),
                             )
                             id_endereco = cursor.fetchone()[0]
