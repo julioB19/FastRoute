@@ -12,7 +12,24 @@ class ServicoImportacao:
 
     def importar_dados_csv(self, arquivo, tamanho_lote: int = 500):
         try:
-            df = pd.read_csv(io.StringIO(arquivo.stream.read().decode('utf-8')), sep=',')
+
+            # CORRIGIDO: CSV É SEPARADO POR ';'
+            df = pd.read_csv(
+                io.StringIO(arquivo.stream.read().decode('utf-8')),
+                sep=';'
+            )
+
+            # valida se a coluna Coord existe
+            if "Coord" not in df.columns and "coord" not in df.columns:
+                return False, "Erro: coluna 'Coord' não encontrada no CSV."
+
+            # unifica o nome para evitar problemas com maiúsculas/minúsculas
+            if "Coord" in df.columns:
+                df.rename(columns={"Coord": "coord"}, inplace=True)
+
+            # ------------------------------------------------------------
+            # LIMPEZA
+            # ------------------------------------------------------------
             df = df[df['NfForCod'].notnull() & (df['NfForCod'] != '')]
             df['NfForCod'] = df['NfForCod'].apply(lambda x: int(float(x)))
             df['NfNumero'] = df['NfNumero'].apply(lambda x: int(float(x)))
@@ -22,11 +39,14 @@ class ServicoImportacao:
                 total_processadas = 0
 
                 for index, row in enumerate(df.itertuples(index=False), start=1):
-                    # Evita perder as linhas ja persistidas em caso de erro de formato
+
                     try:
                         id_cliente = row.NfForCod
                         nome_cliente = f"Cliente {id_cliente}"
 
+                        # ------------------------------------------------------------
+                        # CLIENTE
+                        # ------------------------------------------------------------
                         cursor.execute(
                             """
                             INSERT INTO CLIENTE (id_cliente, nome_cliente)
@@ -37,11 +57,25 @@ class ServicoImportacao:
                             (id_cliente, nome_cliente),
                         )
 
+                        # ------------------------------------------------------------
+                        # ENDEREÇO + COORDENADAS
+                        # ------------------------------------------------------------
+                        coordenadas = getattr(row, 'coord', None)
+
                         cursor.execute(
                             """
-                            INSERT INTO ENDERECO_CLIENTE (id_cliente, cidade, bairro, tipo_logradouro, numero, complemento)
-                            VALUES (%s, %s, %s, %s, %s, %s)
-                            ON CONFLICT DO NOTHING;
+                            INSERT INTO ENDERECO_CLIENTE (
+                                id_cliente,
+                                cidade,
+                                bairro,
+                                tipo_logradouro,
+                                numero,
+                                complemento,
+                                coordenadas
+                            )
+                            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (id_cliente, cidade, bairro, tipo_logradouro)
+                            DO UPDATE SET coordenadas = EXCLUDED.coordenadas;
                             """,
                             (
                                 id_cliente,
@@ -50,9 +84,11 @@ class ServicoImportacao:
                                 row.TraEnd,
                                 str(row.TraNumEnd) if pd.notna(row.TraNumEnd) else None,
                                 row.TraComplemento,
+                                coordenadas,
                             ),
                         )
 
+                        # Buscar ID do endereço
                         cursor.execute(
                             """
                             SELECT id_endereco
@@ -67,6 +103,9 @@ class ServicoImportacao:
                         )
                         id_endereco = cursor.fetchone()[0]
 
+                        # ------------------------------------------------------------
+                        # PRODUTO
+                        # ------------------------------------------------------------
                         if row.ItemProCod:
                             fam = int(float(row.ProFamCod)) if pd.notna(row.ProFamCod) else None
                             grp = int(float(row.ProGrpCod)) if pd.notna(row.ProGrpCod) else None
@@ -87,6 +126,9 @@ class ServicoImportacao:
                                 ),
                             )
 
+                        # ------------------------------------------------------------
+                        # PEDIDO
+                        # ------------------------------------------------------------
                         cursor.execute(
                             """
                             INSERT INTO PEDIDO (n_nota, dt_nota, id_cliente, id_endereco)
@@ -97,6 +139,9 @@ class ServicoImportacao:
                             (row.NfNumero, row.NfDatEmis, id_cliente, id_endereco),
                         )
 
+                        # ------------------------------------------------------------
+                        # ITENS DO PEDIDO
+                        # ------------------------------------------------------------
                         if row.ItemProCod:
                             qtd_bruta = str(row.ItemQtdade) if pd.notna(row.ItemQtdade) else "1"
                             qtd = float(qtd_bruta.replace(',', '.')) if qtd_bruta else 1.0
@@ -121,8 +166,13 @@ class ServicoImportacao:
                 conn.commit()
 
             return True, "Importação concluída com sucesso!"
+
         except Exception as e:
             return False, f"Erro ao processar arquivo: {e}"
+
+    # -----------------------------------------------------------------
+    # FUNÇÕES DE CONSULTA (mantidas)
+    # -----------------------------------------------------------------
 
     def buscar_clientes(self):
         try:
@@ -152,7 +202,7 @@ class ServicoImportacao:
                 cursor.execute("SELECT COUNT(*) FROM PEDIDO;")
                 total_registros = cursor.fetchone()[0] or 0
 
-                total_paginas = max(math.ceil(total_registros / itens_por_pagina), 1) if total_registros else 1
+                total_paginas = max(math.ceil(total_registros / itens_por_pagina), 1)
                 pagina = min(pagina, total_paginas)
                 offset = (pagina - 1) * itens_por_pagina
 
@@ -189,6 +239,7 @@ class ServicoImportacao:
                 "total_registros": total_registros,
                 "itens_por_pagina": itens_por_pagina,
             }
+
         except Exception as e:
             print(f"Erro ao listar pedidos: {e}")
             return {
