@@ -23,7 +23,7 @@ class ServicoImportacao:
             if "Coord" not in df.columns and "coord" not in df.columns:
                 return False, "Erro: coluna 'Coord' não encontrada no CSV."
 
-            # unifica o nome para evitar problemas com maiúsculas/minúsculas
+            # unifica o nome
             if "Coord" in df.columns:
                 df.rename(columns={"Coord": "coord"}, inplace=True)
 
@@ -57,11 +57,12 @@ class ServicoImportacao:
                             (id_cliente, nome_cliente),
                         )
 
-<<<<<<< HEAD
                         # ------------------------------------------------------------
                         # ENDEREÇO + COORDENADAS
                         # ------------------------------------------------------------
-                        coordenadas = getattr(row, 'coord', None)
+                        numero = str(row.TraNumEnd) if pd.notna(row.TraNumEnd) else None
+                        complemento = row.TraComplemento if pd.notna(row.TraComplemento) else None
+                        coordenadas = getattr(row, "coord", None)
 
                         cursor.execute(
                             """
@@ -83,15 +84,11 @@ class ServicoImportacao:
                                 row.MunNom,
                                 row.TraBairro,
                                 row.TraEnd,
-                                str(row.TraNumEnd) if pd.notna(row.TraNumEnd) else None,
-                                row.TraComplemento,
-                                coordenadas,
+                                numero,
+                                complemento,
+                                coordenadas
                             ),
                         )
-=======
-                        numero = str(row.TraNumEnd) if pd.notna(row.TraNumEnd) else None
-                        complemento = row.TraComplemento if pd.notna(row.TraComplemento) else None
->>>>>>> main
 
                         # Buscar ID do endereço
                         cursor.execute(
@@ -115,8 +112,10 @@ class ServicoImportacao:
                         else:
                             cursor.execute(
                                 """
-                                INSERT INTO ENDERECO_CLIENTE (id_cliente, cidade, bairro, tipo_logradouro, numero, complemento)
-                                VALUES (%s, %s, %s, %s, %s, %s)
+                                INSERT INTO ENDERECO_CLIENTE (
+                                    id_cliente, cidade, bairro, tipo_logradouro, numero, complemento, coordenadas
+                                )
+                                VALUES (%s, %s, %s, %s, %s, %s, %s)
                                 RETURNING id_endereco;
                                 """,
                                 (
@@ -126,6 +125,7 @@ class ServicoImportacao:
                                     row.TraEnd,
                                     numero,
                                     complemento,
+                                    coordenadas
                                 ),
                             )
                             id_endereco = cursor.fetchone()[0]
