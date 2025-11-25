@@ -37,35 +37,44 @@ class ServicoImportacao:
                             (id_cliente, nome_cliente),
                         )
 
-                        cursor.execute(
-                            """
-                            INSERT INTO ENDERECO_CLIENTE (id_cliente, cidade, bairro, tipo_logradouro, numero, complemento)
-                            VALUES (%s, %s, %s, %s, %s, %s)
-                            ON CONFLICT DO NOTHING;
-                            """,
-                            (
-                                id_cliente,
-                                row.MunNom,
-                                row.TraBairro,
-                                row.TraEnd,
-                                str(row.TraNumEnd) if pd.notna(row.TraNumEnd) else None,
-                                row.TraComplemento,
-                            ),
-                        )
+                        numero = str(row.TraNumEnd) if pd.notna(row.TraNumEnd) else None
+                        complemento = row.TraComplemento if pd.notna(row.TraComplemento) else None
 
                         cursor.execute(
                             """
                             SELECT id_endereco
                             FROM ENDERECO_CLIENTE
                             WHERE id_cliente = %s
-                                AND cidade = %s
-                                AND bairro = %s
-                                AND tipo_logradouro = %s
+                              AND cidade = %s
+                              AND bairro = %s
+                              AND tipo_logradouro = %s
+                              AND COALESCE(numero, '') = COALESCE(%s, '')
+                              AND COALESCE(complemento, '') = COALESCE(%s, '')
                             LIMIT 1;
                             """,
-                            (id_cliente, row.MunNom, row.TraBairro, row.TraEnd),
+                            (id_cliente, row.MunNom, row.TraBairro, row.TraEnd, numero, complemento),
                         )
-                        id_endereco = cursor.fetchone()[0]
+                        endereco_existente = cursor.fetchone()
+
+                        if endereco_existente:
+                            id_endereco = endereco_existente[0]
+                        else:
+                            cursor.execute(
+                                """
+                                INSERT INTO ENDERECO_CLIENTE (id_cliente, cidade, bairro, tipo_logradouro, numero, complemento)
+                                VALUES (%s, %s, %s, %s, %s, %s)
+                                RETURNING id_endereco;
+                                """,
+                                (
+                                    id_cliente,
+                                    row.MunNom,
+                                    row.TraBairro,
+                                    row.TraEnd,
+                                    numero,
+                                    complemento,
+                                ),
+                            )
+                            id_endereco = cursor.fetchone()[0]
 
                         if row.ItemProCod:
                             fam = int(float(row.ProFamCod)) if pd.notna(row.ProFamCod) else None
