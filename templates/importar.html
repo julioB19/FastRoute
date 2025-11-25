@@ -15,14 +15,25 @@
                         </div>
 
                         <div class="text-center">
-                            <div id="barraProgressoContainer" class="progress mb-3 d-none" style="height: 18px;">
-                                <div id="barraProgresso" class="progress-bar progress-bar-striped progress-bar-animated"
-                                     role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                            <div id="barraProgressoContainer" class="progress mb-3 d-none" style="height: 25px; background-color: #e9ecef; border-radius: 0.5rem;">
+                                
+                                <div id="barraProgresso"
+                                     class="progress-bar progress-bar-striped progress-bar-animated"
+                                     role="progressbar"
+                                     style="
+                                        width: 0%;
+                                        background-color: #0c8f4e; 
+                                        font-weight: bold;
+                                        font-size: 0.9rem;
+                                        transition: width 0.2s linear;
+                                     "
+                                     aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
                                     Iniciando...
                                 </div>
+
                             </div>
 
-                            <button id="btnImportar" type="submit" class="btn btn-cotri px-4">Importar</button>
+                            <button id="btnImportar" type="submit" class="btn btn-cotri px-4" style="background-color: #0c8f4e; color: white;">Importar</button>
 
                             {% if erro %}
                                 <div class="alert alert-danger text-center mt-3">{{ erro }}</div>
@@ -48,20 +59,57 @@ document.addEventListener('DOMContentLoaded', function() {
     let intervalo;
 
     form.addEventListener('submit', function() {
+        // Evita múltiplos cliques
+        if(botao.disabled) return;
+        
         botao.disabled = true;
+        botao.innerHTML = 'Carregando...'; // Feedback visual no botão
         barraContainer.classList.remove('d-none');
+
+        // Reset inicial
+        let porcentagem = 0;
         barra.style.width = '0%';
-        barra.setAttribute('aria-valuenow', '0');
         barra.textContent = 'Iniciando...';
 
         intervalo = setInterval(() => {
-            const atual = parseInt(barra.getAttribute('aria-valuenow'), 10);
-            const proximo = Math.min(atual + 5, 90);
-            barra.style.width = proximo + '%';
-            barra.setAttribute('aria-valuenow', proximo);
-            barra.textContent = proximo < 90 ? 'Processando...' : 'Quase pronto...';
-        }, 300);
+            // Lógica de "Desaceleração":
+            // 1. Até 50%: Vai rápido (+5)
+            // 2. De 50% a 80%: Vai médio (+2)
+            // 3. De 80% a 99%: Vai muito devagar (+0.4), mas continua andando.
+            
+            let incremento = 0;
+
+            if (porcentagem < 50) {
+                incremento = 5;
+            } else if (porcentagem < 80) {
+                incremento = 2;
+            } else if (porcentagem < 99) {
+                incremento = 0.4; 
+            } else {
+                // Se chegou em 99%, para e espera o reload da página
+                incremento = 0;
+            }
+
+            porcentagem += incremento;
+
+            // Trava visual em 99%
+            if (porcentagem > 99) porcentagem = 99;
+
+            barra.style.width = porcentagem + '%';
+            barra.setAttribute('aria-valuenow', porcentagem);
+
+            // Atualiza o texto conforme o progresso
+            if (porcentagem < 30) {
+                 barra.textContent = 'Enviando arquivo...';
+            } else if (porcentagem < 90) {
+                 barra.textContent = 'Processando dados...';
+            } else {
+                 barra.textContent = 'Finalizando...';
+            }
+
+        }, 200); // Atualiza a cada 200ms para ficar fluido
     });
 });
 </script>
+
 {% endblock %}
