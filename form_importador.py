@@ -12,7 +12,7 @@ class ServicoImportacao:
 
     def importar_dados_csv(self, arquivo, tamanho_lote: int = 500):
         try:
-            df = pd.read_csv(io.StringIO(arquivo.stream.read().decode('utf-8')), sep=',')
+            df = pd.read_csv(io.StringIO(arquivo.stream.read().decode('utf-8')), sep=';')
             df = df[df['NfForCod'].notnull() & (df['NfForCod'] != '')]
             df['NfForCod'] = df['NfForCod'].apply(lambda x: int(float(x)))
             df['NfNumero'] = df['NfNumero'].apply(lambda x: int(float(x)))
