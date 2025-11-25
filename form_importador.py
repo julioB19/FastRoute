@@ -57,6 +57,7 @@ class ServicoImportacao:
                             (id_cliente, nome_cliente),
                         )
 
+<<<<<<< HEAD
                         # ------------------------------------------------------------
                         # ENDEREÇO + COORDENADAS
                         # ------------------------------------------------------------
@@ -87,6 +88,10 @@ class ServicoImportacao:
                                 coordenadas,
                             ),
                         )
+=======
+                        numero = str(row.TraNumEnd) if pd.notna(row.TraNumEnd) else None
+                        complemento = row.TraComplemento if pd.notna(row.TraComplemento) else None
+>>>>>>> main
 
                         # Buscar ID do endereço
                         cursor.execute(
@@ -94,14 +99,36 @@ class ServicoImportacao:
                             SELECT id_endereco
                             FROM ENDERECO_CLIENTE
                             WHERE id_cliente = %s
-                                AND cidade = %s
-                                AND bairro = %s
-                                AND tipo_logradouro = %s
+                              AND cidade = %s
+                              AND bairro = %s
+                              AND tipo_logradouro = %s
+                              AND COALESCE(numero, '') = COALESCE(%s, '')
+                              AND COALESCE(complemento, '') = COALESCE(%s, '')
                             LIMIT 1;
                             """,
-                            (id_cliente, row.MunNom, row.TraBairro, row.TraEnd),
+                            (id_cliente, row.MunNom, row.TraBairro, row.TraEnd, numero, complemento),
                         )
-                        id_endereco = cursor.fetchone()[0]
+                        endereco_existente = cursor.fetchone()
+
+                        if endereco_existente:
+                            id_endereco = endereco_existente[0]
+                        else:
+                            cursor.execute(
+                                """
+                                INSERT INTO ENDERECO_CLIENTE (id_cliente, cidade, bairro, tipo_logradouro, numero, complemento)
+                                VALUES (%s, %s, %s, %s, %s, %s)
+                                RETURNING id_endereco;
+                                """,
+                                (
+                                    id_cliente,
+                                    row.MunNom,
+                                    row.TraBairro,
+                                    row.TraEnd,
+                                    numero,
+                                    complemento,
+                                ),
+                            )
+                            id_endereco = cursor.fetchone()[0]
 
                         # ------------------------------------------------------------
                         # PRODUTO
