@@ -28,7 +28,7 @@
                 <option value="todos" {% if filtro == 'todos' %}selected{% endif %}>Todos</option>
                 <option value="completos" {% if filtro == 'completos' %}selected{% endif %}>Completos</option>
                 <option value="incompletos" {% if filtro == 'incompletos' %}selected{% endif %}>Incompletos</option>
-                <option value="entregue" {% if filtro == 'entregues' %}selected{% endif %}>Entregues</option>
+                <option value="entregues" {% if filtro == 'entregues' %}selected{% endif %}>Entregues</option>
             </select>
         </div>
 
@@ -77,15 +77,15 @@
                                     <td>{{ p.numero_pedido }}</td>
                                     <td>{{ p.cliente }}</td>
                                     <td>{{ p.endereco }}</td>
-                                    <td>{{ p.data_nota or '-' }}</td>
+                                    <td>{{ p.data_nota | data_br }}</td>
 
                                     <td>
                                         {% if p.status == 'COMPLETO' %}
                                             <span class="badge bg-success">Completo</span>
                                         {% elif p.status == 'INCOMPLETO' %}
                                             <span class="badge bg-danger">Incompleto</span>
-                                        {% elif p.status == 'ENTREGUE' %}
-                                            <span class="badge bg-primary">Entregue</span>
+                                        {% elif p.status == 'ENTREGUES' %}
+                                            <span class="badge bg-primary">Entregues</span>
                                         {% else %}
                                             <span class="badge bg-secondary">-</span>
                                         {% endif %}

@@ -91,7 +91,10 @@ def realizar_logout():
 @login_obrigatorio
 def home():
     # Totais para o dashboard
-    total_completos = servico_pedidos.contar_completos()
+    total_completos = servico_pedidos.contar_com_filtros({
+        "coords_not_null": True,
+        "excluir_entregues": True
+    })
     total_incompletos = servico_pedidos.contar_incompletos()
 
     return render_template(
@@ -296,10 +299,11 @@ def pedidos_importados():
 
     if filtro == "completos":
         filtros["coords_not_null"] = True
+        filtros["excluir_entregues"] = True
     elif filtro == "incompletos":
         filtros["coords_null"] = True
-    elif filtro == "entregue":
-        filtros["entregue"] = True
+    elif filtro == "entregues":
+        filtros["entregues"] = True
 
     if data_nota:
         filtros["data_inicio"] = data_nota
@@ -390,7 +394,14 @@ def entregas_pendentes():
     except TemplateNotFound:
         return jsonify(pag)
 
-
+@app.template_filter("data_br")
+def data_br(value):
+    if not value:
+        return "-"
+    try:
+        return value.strftime("%d/%m/%Y")
+    except:
+        return value  # caso já venha formatada
 # -----------------------------
 # MAIN
 # -----------------------------

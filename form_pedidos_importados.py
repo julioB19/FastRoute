@@ -86,9 +86,14 @@ class ServicoPedidosImportados:
         if filtros.get("coords_null"):
             where_parts.append("ec.coordenadas IS NULL OR ec.coordenadas = ''")
 
-        if filtros.get("entregue"):
+        if filtros.get("entregues"):
             where_parts.append(
                 "EXISTS (SELECT 1 FROM ENTREGA e WHERE e.pedido_n_nota = p.n_nota)"
+            )
+
+        if filtros.get("excluir_entregues"):
+            where_parts.append(
+                "NOT EXISTS (SELECT 1 FROM ENTREGA e WHERE e.pedido_n_nota = p.n_nota)"
             )
 
         if where_parts:
@@ -116,10 +121,10 @@ class ServicoPedidosImportados:
 
         coordenadas = row.get("coordenadas")
         tem_coords = coordenadas is not None and str(coordenadas).strip() != ""
-        entregou = bool(row.get("entregue"))
+        entregou = bool(row.get("entregues"))
 
         if entregou:
-            status = "ENTREGUE"
+            status = "ENTREGUES"
         elif tem_coords:
             status = "COMPLETO"
         else:
@@ -172,7 +177,7 @@ class ServicoPedidosImportados:
                 ec.tipo_logradouro,
                 ec.numero,
                 ec.coordenadas,
-                EXISTS (SELECT 1 FROM ENTREGA e WHERE e.pedido_n_nota = p.n_nota) AS entregue
+                EXISTS (SELECT 1 FROM ENTREGA e WHERE e.pedido_n_nota = p.n_nota) AS entregues
             FROM PEDIDO p
             LEFT JOIN CLIENTE c ON c.id_cliente = p.id_cliente
             LEFT JOIN ENDERECO_CLIENTE ec ON ec.id_endereco = p.id_endereco
@@ -211,7 +216,7 @@ class ServicoPedidosImportados:
                 ec.tipo_logradouro,
                 ec.numero,
                 ec.coordenadas,
-                EXISTS (SELECT 1 FROM ENTREGA e WHERE e.pedido_n_nota = p.n_nota) AS entregue
+                EXISTS (SELECT 1 FROM ENTREGA e WHERE e.pedido_n_nota = p.n_nota) AS entregues
             FROM PEDIDO p
             LEFT JOIN CLIENTE c ON c.id_cliente = p.id_cliente
             LEFT JOIN ENDERECO_CLIENTE ec ON ec.id_endereco = p.id_endereco
@@ -245,3 +250,17 @@ class ServicoPedidosImportados:
                 item["classificacao_texto"] = "Normal"
 
         return itens
+
+    def contar_com_filtros(self, filtros):
+        # Usa o MESMO builder correto
+        where_sql, params = self._build_filtros_sql(filtros)
+
+        sql = f"""
+            SELECT COUNT(*) AS total
+            FROM PEDIDO p
+            LEFT JOIN ENDERECO_CLIENTE ec ON ec.id_endereco = p.id_endereco
+            {where_sql};
+        """
+
+        rows = self._execute_select(sql, tuple(params))
+        return rows[0]["total"] if rows else 0
