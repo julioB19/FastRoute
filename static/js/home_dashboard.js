@@ -134,7 +134,7 @@ document.addEventListener("DOMContentLoaded", function () {
             maxZoom: 19
         }).addTo(map);
 
-        fetch('/entregas-pendentes')
+        fetch('/entregas-completas')
             .then(res => res.json())
             .then(marcadores => {
                 const bounds = [];
@@ -186,7 +186,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     maxZoom: 19
                 }).addTo(mapaExpandido);
 
-                fetch("/entregas-pendentes")
+                fetch("/entregas-completas")
                     .then(res => res.json())
                     .then(marcadores => {
                         const bounds = [];

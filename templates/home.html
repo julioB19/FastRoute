@@ -112,13 +112,24 @@
 
 
 <!-- OVERLAY DO MAPA EXPANDIDO -->
+<!-- OVERLAY DO MAPA EXPANDIDO -->
 <div id="overlayMapa" class="overlay-mapa" style="display: none;">
     <div class="overlay-mapa-content">
+
         <button id="fecharOverlayMapa" class="btn-fechar-mapa">×</button>
-        <h4 class="titulo-overlay">Mapa Completo de Entregas Pendentes</h4>
+        <h4 class="titulo-overlay">Mapa Completo de Entregas</h4>
+
+        <!-- Botões de filtro estilo Leaflet -->
+        <div class="leaflet-control leaflet-bar filtro-mapa-control">
+            <a href="#" id="filtroTodos" title="Mostrar todos">T</a>
+            <a href="#" id="filtroCompletos" title="Somente completos">C</a>
+            <a href="#" id="filtroEntregues" title="Somente entregues">E</a>
+        </div>
+
         <div id="mapaExpandido"></div>
     </div>
 </div>
+
 
 
 <!-- Dependências locais (FullCalendar + Leaflet) -->

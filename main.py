@@ -402,6 +402,42 @@ def data_br(value):
         return value.strftime("%d/%m/%Y")
     except:
         return value  # caso já venha formatada
+
+@app.route("/entregas-mapa")
+@login_obrigatorio
+def entregas_mapa():
+    query = """
+        SELECT
+            p.n_nota,
+            ec.coordenadas,
+            EXISTS(SELECT 1 FROM ENTREGA e WHERE e.pedido_n_nota = p.n_nota) AS entregue
+        FROM PEDIDO p
+        LEFT JOIN ENDERECO_CLIENTE ec ON ec.id_endereco = p.id_endereco
+        WHERE ec.coordenadas IS NOT NULL
+        AND ec.coordenadas <> '';
+    """
+
+    rows = servico_pedidos._execute_select(query)
+
+    marcadores = []
+    for r in rows:
+        coords = r["coordenadas"]
+        try:
+            lat, lng = map(float, coords.split(","))
+            status = "ENTREGUE" if r["entregue"] else "COMPLETO"
+
+            marcadores.append({
+                "n_nota": r["n_nota"],
+                "lat": lat,
+                "lng": lng,
+                "status": status
+            })
+        except:
+            pass
+
+    return jsonify(marcadores)
+
+
 # -----------------------------
 # MAIN
 # -----------------------------
