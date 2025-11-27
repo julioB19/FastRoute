@@ -1,5 +1,23 @@
 // ======================
-//  Calendário Ultra-Compacto
+//  ÍCONES PERSONALIZADOS (PIN VERDE E PIN AZUL)
+// ======================
+
+const pinVerde = L.icon({
+    iconUrl: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="%23009035" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 6-9 13-9 13S3 16 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+    iconSize: [32, 32],
+    iconAnchor: [16, 32],
+    popupAnchor: [0, -30]
+});
+
+const pinAzul = L.icon({
+    iconUrl: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="%23005cc5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 6-9 13-9 13S3 16 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+    iconSize: [32, 32],
+    iconAnchor: [16, 32],
+    popupAnchor: [0, -30]
+});
+
+// ======================
+//  CALENDÁRIO ULTRA-COMPACTO
 // ======================
 
 (function () {
@@ -128,13 +146,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (mapaEl && typeof L !== 'undefined') {
 
-        const map = L.map('miniMapa').setView([-27.358885, -53.398043], 12); //Coordenadas iniciais(Meio de FW)
+        const map = L.map('miniMapa').setView([-27.358885, -53.398043], 12);
 
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19
         }).addTo(map);
 
-        fetch('/entregas-completas')
+        fetch('/entregas-mapa')
             .then(res => res.json())
             .then(marcadores => {
                 const bounds = [];
@@ -142,8 +160,11 @@ document.addEventListener("DOMContentLoaded", function () {
                 marcadores.forEach(m => {
                     if (!m.lat || !m.lng) return;
 
-                    const marker = L.marker([m.lat, m.lng]).addTo(map);
-                    marker.bindPopup(m.n_nota ? `Pedido ${m.n_nota}` : 'Entrega pendente');
+                    const icone = m.status === "ENTREGUE" ? pinAzul : pinVerde;
+
+                    const marker = L.marker([m.lat, m.lng], { icon: icone }).addTo(map);
+
+                    marker.bindPopup(`Pedido ${m.n_nota}<br>Status: ${m.status}`);
 
                     bounds.push([m.lat, m.lng]);
                 });
@@ -156,7 +177,7 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 // ======================
-//  MAPA EXPANDIDO (BOTÃO)
+//  MAPA EXPANDIDO
 // ======================
 
 document.addEventListener("DOMContentLoaded", function () {
@@ -165,53 +186,75 @@ document.addEventListener("DOMContentLoaded", function () {
     const overlay = document.getElementById("overlayMapa");
     const fechar = document.getElementById("fecharOverlayMapa");
 
-    if (!btnAbrir || !overlay || !fechar) {
-        console.error("Elemento do mapa expandido não encontrado.");
-        return;
-    }
+    const filtroTodos = document.getElementById("filtroTodos");
+    const filtroCompletos = document.getElementById("filtroCompletos");
+    const filtroEntregues = document.getElementById("filtroEntregues");
 
     let mapaExpandido = null;
+    let marcadoresLayer = null;
 
+    function carregarMarcadores(filtro = "TODOS") {
+
+        if (!mapaExpandido) return;
+
+        if (marcadoresLayer) {
+            mapaExpandido.removeLayer(marcadoresLayer);
+        }
+
+        marcadoresLayer = L.layerGroup().addTo(mapaExpandido);
+
+        fetch('/entregas-mapa')
+            .then(res => res.json())
+            .then(marcadores => {
+                const bounds = [];
+
+                marcadores.forEach(m => {
+                    if (!m.lat || !m.lng) return;
+
+                    if (filtro === "COMPLETO" && m.status !== "COMPLETO") return;
+                    if (filtro === "ENTREGUE" && m.status !== "ENTREGUE") return;
+
+                    const icone = m.status === "ENTREGUE" ? pinAzul : pinVerde;
+
+                    const marker = L.marker([m.lat, m.lng], { icon: icone }).addTo(marcadoresLayer);
+
+                    marker.bindPopup(`Pedido ${m.n_nota}<br>Status: ${m.status}`);
+
+                    bounds.push([m.lat, m.lng]);
+                });
+
+                if (bounds.length > 0) {
+                    mapaExpandido.fitBounds(bounds, { padding: [30, 30] });
+                }
+            });
+    }
+
+    // Abrir overlay
     btnAbrir.addEventListener("click", () => {
-
         overlay.style.display = "flex";
 
         setTimeout(() => {
-
             if (!mapaExpandido) {
-
                 mapaExpandido = L.map("mapaExpandido").setView([-27.358885, -53.398043], 12);
 
                 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
                     maxZoom: 19
                 }).addTo(mapaExpandido);
 
-                fetch("/entregas-completas")
-                    .then(res => res.json())
-                    .then(marcadores => {
-                        const bounds = [];
-
-                        marcadores.forEach(m => {
-                            if (!m.lat || !m.lng) return;
-
-                            const marker = L.marker([m.lat, m.lng]).addTo(mapaExpandido);
-                            marker.bindPopup(m.n_nota ? `Pedido ${m.n_nota}` : "Entrega pendente");
-                            bounds.push([m.lat, m.lng]);
-                        });
-
-                        if (bounds.length > 0) {
-                            mapaExpandido.fitBounds(bounds, { padding: [30, 30] });
-                        }
-                    });
-
+                carregarMarcadores("TODOS");
             } else {
                 mapaExpandido.invalidateSize();
             }
-
         }, 200);
     });
 
+    // Fechar overlay
     fechar.addEventListener("click", () => {
         overlay.style.display = "none";
     });
+
+    // Filtros
+    filtroTodos.addEventListener("click", () => carregarMarcadores("TODOS"));
+    filtroCompletos.addEventListener("click", () => carregarMarcadores("COMPLETO"));
+    filtroEntregues.addEventListener("click", () => carregarMarcadores("ENTREGUE"));
 });
