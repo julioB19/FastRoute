@@ -13,11 +13,11 @@ app.secret_key = 'fastrout'  # Troque para uma chave mais segura em producao
 
 # Config BG
 DB_USER = "postgres"
-DB_PASSWORD = "fastrout"
-#DB_PASSWORD = "1234"
+#DB_PASSWORD = "fastrout"
+DB_PASSWORD = "1234"
 DB_HOST = "localhost"
-DB_PORT = "3380"
-#DB_PORT = "5433"
+#DB_PORT = "3380"
+DB_PORT = "5433"
 DB_NAME = "FastRoute"
 
 config_banco = ConfiguracaoBanco(DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT)
@@ -406,6 +406,11 @@ def data_br(value):
 @app.route("/entregas-mapa")
 @login_obrigatorio
 def entregas_mapa():
+    """
+    Retorna marcadores agregados por coordenadas.
+    Se existir pelo menos uma entrega (entregue=True) para uma coordenada,
+    o status daquela coordenada será 'ENTREGUE'. Caso contrário 'COMPLETO'.
+    """
     query = """
         SELECT
             p.n_nota,
@@ -419,23 +424,69 @@ def entregas_mapa():
 
     rows = servico_pedidos._execute_select(query)
 
-    marcadores = []
+    # Agregamos por coordenadas para evitar múltiplos marcadores sobrepostos
+    agregados = {}  # chave = coords, valor = dict { lat, lng, n_notas: [..], status }
     for r in rows:
-        coords = r["coordenadas"]
+        coords = r.get("coordenadas")
+        if not coords:
+            continue
         try:
             lat, lng = map(float, coords.split(","))
-            status = "ENTREGUE" if r["entregue"] else "COMPLETO"
+        except Exception:
+            continue
 
-            marcadores.append({
-                "n_nota": r["n_nota"],
+        key = f"{lat:.6f},{lng:.6f}"
+        entregado = bool(r.get("entregue"))
+
+        current = agregados.get(key)
+        if not current:
+            agregados[key] = {
                 "lat": lat,
                 "lng": lng,
-                "status": status
-            })
-        except:
-            pass
+                "n_notas": [r.get("n_nota")],
+                # se qualquer um for entregue, marca ENTREGUE
+                "status": "ENTREGUE" if entregado else "COMPLETO"
+            }
+        else:
+            # append nota
+            current["n_notas"].append(r.get("n_nota"))
+            # se algum for entregue, força ENTREGUE
+            if entregado:
+                current["status"] = "ENTREGUE"
+
+    marcadores = []
+    for v in agregados.values():
+        marcadores.append({
+            "n_notas": v["n_notas"],            # agora pode ser lista
+            "lat": v["lat"],
+            "lng": v["lng"],
+            "status": v["status"]
+        })
 
     return jsonify(marcadores)
+@app.route("/entregas-datas")
+@login_obrigatorio
+def entregas_datas():
+    """
+    Retorna somente as datas em que houve entregas,
+    para marcar no calendário do dashboard.
+    """
+    query = """
+        SELECT DISTINCT DATE(e.data_entrega) AS data_entrega
+        FROM ENTREGA e
+        WHERE e.data_entrega IS NOT NULL
+        ORDER BY data_entrega;
+    """
+
+    rows = servico_pedidos._execute_select(query)
+
+    datas = []
+    for r in rows:
+        datas.append({
+            "start": r["data_entrega"].strftime("%Y-%m-%d")
+        })
+
+    return jsonify(datas)
 
 
 # -----------------------------

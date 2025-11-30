@@ -123,8 +123,9 @@ class ServicoPedidosImportados:
         tem_coords = coordenadas is not None and str(coordenadas).strip() != ""
         entregou = bool(row.get("entregues"))
 
+        # PADRÃO: usar ENTREGUE (singular) para consistência com o mapa
         if entregou:
-            status = "ENTREGUES"
+            status = "ENTREGUE"
         elif tem_coords:
             status = "COMPLETO"
         else:

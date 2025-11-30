@@ -160,11 +160,21 @@ document.addEventListener("DOMContentLoaded", function () {
                 marcadores.forEach(m => {
                     if (!m.lat || !m.lng) return;
 
-                    const icone = m.status === "ENTREGUE" ? pinAzul : pinVerde;
+                    const status = (m.status || "").toUpperCase();
+                    const icone = status === "ENTREGUE" ? pinAzul : pinVerde;
 
                     const marker = L.marker([m.lat, m.lng], { icon: icone }).addTo(map);
 
-                    marker.bindPopup(`Pedido ${m.n_nota}<br>Status: ${m.status}`);
+                    // se entregue, traz marcador para frente (visível sobrepostos)
+                    if (status === "ENTREGUE" && typeof marker.bringToFront === "function") {
+                        marker.bringToFront();
+                    } else if (status === "ENTREGUE" && marker.setZIndexOffset) {
+                        marker.setZIndexOffset(1000);
+                    }
+
+                    // bind popup com possíveis múltiplas notas
+                    let notas = Array.isArray(m.n_notas) ? m.n_notas.join(", ") : (m.n_notas || m.n_nota || "");
+                    marker.bindPopup(`Pedidos: ${notas}<br>Status: ${status}`);
 
                     bounds.push([m.lat, m.lng]);
                 });
@@ -193,6 +203,12 @@ document.addEventListener("DOMContentLoaded", function () {
     let mapaExpandido = null;
     let marcadoresLayer = null;
 
+    // Marca botão ativo
+    function ativarBotao(btn) {
+        document.querySelectorAll(".filtro-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+    }
+
     function carregarMarcadores(filtro = "TODOS") {
 
         if (!mapaExpandido) return;
@@ -211,14 +227,26 @@ document.addEventListener("DOMContentLoaded", function () {
                 marcadores.forEach(m => {
                     if (!m.lat || !m.lng) return;
 
-                    if (filtro === "COMPLETO" && m.status !== "COMPLETO") return;
-                    if (filtro === "ENTREGUE" && m.status !== "ENTREGUE") return;
+                    const status = (m.status || "").toUpperCase();
 
-                    const icone = m.status === "ENTREGUE" ? pinAzul : pinVerde;
+                    // FILTRAGEM CORRETA
+                    if (filtro === "COMPLETOS" && status !== "COMPLETO") return;
+                    if (filtro === "ENTREGUES" && status !== "ENTREGUE") return;
+                    // filtro "TODOS" -> não filtra nada (passa tudo)
+
+                    const icone = status === "ENTREGUE" ? pinAzul : pinVerde;
 
                     const marker = L.marker([m.lat, m.lng], { icon: icone }).addTo(marcadoresLayer);
 
-                    marker.bindPopup(`Pedido ${m.n_nota}<br>Status: ${m.status}`);
+                    // traz entregues para frente para evitar que apareça verde por cima do azul
+                    if (status === "ENTREGUE" && typeof marker.bringToFront === "function") {
+                        marker.bringToFront();
+                    } else if (status === "ENTREGUE" && marker.setZIndexOffset) {
+                        marker.setZIndexOffset(1000);
+                    }
+
+                    let notas = Array.isArray(m.n_notas) ? m.n_notas.join(", ") : (m.n_notas || m.n_nota || "");
+                    marker.bindPopup(`Pedidos: ${notas}<br>Status: ${status}`);
 
                     bounds.push([m.lat, m.lng]);
                 });
@@ -241,6 +269,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     maxZoom: 19
                 }).addTo(mapaExpandido);
 
+                ativarBotao(filtroTodos);
                 carregarMarcadores("TODOS");
             } else {
                 mapaExpandido.invalidateSize();
@@ -254,7 +283,18 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     // Filtros
-    filtroTodos.addEventListener("click", () => carregarMarcadores("TODOS"));
-    filtroCompletos.addEventListener("click", () => carregarMarcadores("COMPLETO"));
-    filtroEntregues.addEventListener("click", () => carregarMarcadores("ENTREGUE"));
+    filtroTodos.addEventListener("click", () => {
+        ativarBotao(filtroTodos);
+        carregarMarcadores("TODOS");
+    });
+
+    filtroCompletos.addEventListener("click", () => {
+        ativarBotao(filtroCompletos);
+        carregarMarcadores("COMPLETOS");
+    });
+
+    filtroEntregues.addEventListener("click", () => {
+        ativarBotao(filtroEntregues);
+        carregarMarcadores("ENTREGUES");
+    });
 });
