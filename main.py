@@ -97,13 +97,27 @@ def home():
     })
     total_incompletos = servico_pedidos.contar_incompletos()
 
+    # contar entregas no último mês - exemplo simples (você pode ajustar)
+    entregas_ultimo_mes = 0
+    try:
+        # consulta simples — pode ser trocada por método do serviço
+        q = """
+            SELECT COUNT(DISTINCT DATE(e.data_entrega)) AS total
+            FROM ENTREGA e
+            WHERE e.data_entrega >= (CURRENT_DATE - INTERVAL '30 days');
+        """
+        rows = servico_pedidos._execute_select(q)
+        entregas_ultimo_mes = rows[0]["total"] if rows else 0
+    except Exception:
+        entregas_ultimo_mes = 0
+
     return render_template(
         'home.html',
         usuario=session.get('usuario_nome'),
         cargo=session.get('usuario_cargo'),
         total_pedidos=total_completos,         # BLOCO 1
-        pedidos_incompletos=total_incompletos # BLOCO 2
-
+        pedidos_incompletos=total_incompletos, # BLOCO 2
+        entregas_ultimo_mes=entregas_ultimo_mes
     )
 
 
@@ -403,6 +417,7 @@ def data_br(value):
     except:
         return value  # caso já venha formatada
 
+
 @app.route("/entregas-mapa")
 @login_obrigatorio
 def entregas_mapa():
@@ -464,12 +479,14 @@ def entregas_mapa():
         })
 
     return jsonify(marcadores)
+
+
 @app.route("/entregas-datas")
 @login_obrigatorio
 def entregas_datas():
     """
-    Retorna somente as datas em que houve entregas,
-    para marcar no calendário do dashboard.
+    Retorna lista distinta de datas em que ocorreram entregas
+    no formato YYYY-MM-DD, para o calendário marcar.
     """
     query = """
         SELECT DISTINCT DATE(e.data_entrega) AS data_entrega
@@ -482,9 +499,13 @@ def entregas_datas():
 
     datas = []
     for r in rows:
-        datas.append({
-            "start": r["data_entrega"].strftime("%Y-%m-%d")
-        })
+        # r["data_entrega"] pode ser datetime.date/datetime
+        dt = r.get("data_entrega")
+        try:
+            datas.append({"start": dt.strftime("%Y-%m-%d")})
+        except Exception:
+            # se já for string
+            datas.append({"start": str(dt)})
 
     return jsonify(datas)
 

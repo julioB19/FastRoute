@@ -27,9 +27,10 @@ const pinAzul = L.icon({
     }
 
     function sameDate(a, b) {
-        return a.getFullYear() === b.getFullYear() &&
-               a.getMonth() === b.getMonth() &&
-               a.getDate() === b.getDate();
+        // compara pelas partes UTC para evitar problemas com timezones
+        return a.getUTCFullYear() === b.getUTCFullYear() &&
+               a.getUTCMonth() === b.getUTCMonth() &&
+               a.getUTCDate() === b.getUTCDate();
     }
 
     function renderMiniCompactCalendar(container, year, month, eventDates) {
@@ -50,7 +51,7 @@ const pinAzul = L.icon({
         const title = document.createElement('div');
         title.style.flex = '1';
         title.style.textAlign = 'center';
-        title.innerText = formatMonthName(new Date(year, month, 1));
+        title.innerText = formatMonthName(new Date(Date.UTC(year, month, 1)));
 
         header.appendChild(prevBtn);
         header.appendChild(title);
@@ -68,9 +69,21 @@ const pinAzul = L.icon({
             grid.appendChild(w);
         });
 
-        const firstDay = new Date(year, month, 1).getDay();
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const firstDay = new Date(Date.UTC(year, month, 1)).getUTCDay();
+        const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
         const today = new Date();
+        const todayUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+
+        // Preprocess eventDates -> array of Date objects (UTC midnight)
+        const eventsDatesUTC = (eventDates || []).map(ed => {
+            try {
+                // ed may be string "YYYY-MM-DD" or ISO
+                const d = new Date(ed);
+                return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+            } catch (e) {
+                return null;
+            }
+        }).filter(Boolean);
 
         for (let i = 0; i < firstDay; i++) {
             const emptyCell = document.createElement('div');
@@ -82,15 +95,17 @@ const pinAzul = L.icon({
             const cell = document.createElement('div');
             cell.className = 'mc-day';
 
-            const date = new Date(year, month, d);
+            const date = new Date(Date.UTC(year, month, d));
             const num = document.createElement('div');
             num.className = 'mc-num';
             num.innerText = d;
 
-            if (sameDate(date, today)) cell.classList.add('today');
+            if (sameDate(date, todayUTC)) cell.classList.add('today');
 
-            const hasEvent = eventDates.some(ed => sameDate(new Date(ed), date));
+            const hasEvent = eventsDatesUTC.some(ed => sameDate(ed, date));
             if (hasEvent) {
+                cell.classList.add("entrega"); // aplica estilo azul
+
                 const dot = document.createElement('div');
                 dot.className = 'mc-dot';
                 cell.appendChild(dot);
@@ -115,9 +130,19 @@ const pinAzul = L.icon({
 
     function fetchEventsAndRender(container, year, month) {
         fetch('/entregas-datas')
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) throw new Error('Erro ao buscar datas');
+                return res.json();
+            })
             .then(events => {
-                const eventDates = (events || []).map(e => e.start);
+                // events expected like [{start: "YYYY-MM-DD"}, ...] or array of strings
+                const eventDates = (events || []).map(e => {
+                    if (typeof e === "string") return e;
+                    if (e && e.start) return e.start;
+                    if (e && e.data) return e.data;
+                    return null;
+                }).filter(Boolean);
+
                 renderMiniCompactCalendar(container, year, month, eventDates);
             })
             .catch(err => {
@@ -125,6 +150,10 @@ const pinAzul = L.icon({
                 renderMiniCompactCalendar(container, year, month, []);
             });
     }
+
+    // expose a render function in case other scripts want to re-render
+    window.renderMiniCompactCalendar = renderMiniCompactCalendar;
+    window.fetchEventsAndRender = fetchEventsAndRender;
 
     document.addEventListener("DOMContentLoaded", function () {
         const el = document.getElementById('miniCompactCalendario');
