@@ -15,13 +15,18 @@
     <!-- FILTROS -->
     <form method="get" action="{{ url_for('pedidos_importados') }}" class="row g-3 mb-3 text-white">
 
-        <!-- TOTAL DE REGISTROS -->
-        <div class="col-12">
+        <div class="col-12 mb-1 d-flex justify-content-between align-items-center">
             <span class="text-white" style="font-weight: 600; font-size: 16px;">
                 Total: {{ total_registros }}
             </span>
+
+            <!-- Botão + Filtros -->
+            <button type="button" class="btn btn-outline-light btn-sm" onclick="toggleFiltros()">
+                + Filtros
+            </button>
         </div>
 
+        <!-- Filtro padrão -->
         <div class="col-md-3">
             <label class="form-label text-white">Filtro</label>
             <select class="form-select" name="filtro">
@@ -46,9 +51,55 @@
             </select>
         </div>
 
-        <div class="col-md-3 d-flex align-items-end">
+        <!-- BOTÕES -->
+        <div class="col-md-4 d-flex align-items-end">
             <button class="btn btn-cotri">Aplicar</button>
-            <a href="{{ url_for('pedidos_importados') }}" class="btn btn-outline-light ms-2">Limpar</a>
+
+            <a href="{{ url_for('pedidos_importados') }}" class="btn btn-outline-light ms-2">
+                Limpar
+            </a>
+
+            <!-- BOTÃO NOVO – GERAR ROTA -->
+            <button type="button" class="btn btn-warning text-dark ms-2">
+                Gerar Rota
+            </button>
+        </div>
+
+        <!-- ========================= -->
+        <!-- BLOCOS DE FILTROS EXTRAS -->
+        <!-- ========================= -->
+        <div id="filtrosExtras" style="display:none;">
+
+            <div class="col-md-3 mt-2">
+                <label class="form-label text-white">Cliente</label>
+                <select class="form-select" name="cliente_id">
+                    <option value="">Todos</option>
+                    {% for c in clientes %}
+                        <option value="{{ c.id }}">{{ c.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-3 mt-2">
+                <label class="form-label text-white">Endereço</label>
+                <input type="text" class="form-control" name="endereco" placeholder="Digite o endereço">
+            </div>
+
+            <div class="col-md-3 mt-2">
+                <label class="form-label text-white">Cidade</label>
+                <input type="text" class="form-control" name="cidade" placeholder="Digite a cidade">
+            </div>
+
+            <div class="col-md-3 mt-2">
+                <label class="form-label text-white">Data da Entrega</label>
+                <input type="date" class="form-control" name="data_entrega">
+            </div>
+
+            <div class="col-md-3 mt-2">
+                <label class="form-label text-white">Número da Nota</label>
+                <input type="number" class="form-control" name="numero_nota" placeholder="Ex: 150234">
+            </div>
+
         </div>
 
     </form>
@@ -117,7 +168,6 @@
                         {% set args_base = request.args.to_dict() %}
                         {% set _ = args_base.pop('pagina', None) %}
 
-                        <!-- Botão Anterior -->
                         <li class="page-item {% if pagina <= 1 %}disabled{% endif %}">
                             <a class="page-link"
                                href="{{ url_for('pedidos_importados', pagina=pagina-1, **args_base) }}">
@@ -125,14 +175,12 @@
                             </a>
                         </li>
 
-                        <!-- Página Atual -->
                         <li class="page-item active">
                             <span class="page-link">
                                 Página {{ pagina }} / {{ total_paginas }}
                             </span>
                         </li>
 
-                        <!-- Botão Próxima -->
                         <li class="page-item {% if pagina >= total_paginas %}disabled{% endif %}">
                             <a class="page-link"
                                href="{{ url_for('pedidos_importados', pagina=pagina+1, **args_base) }}">
@@ -142,7 +190,6 @@
 
                     </ul>
 
-                    <!-- Botão Ir para Última Página -->
                     <div class="text-center">
                         <a class="btn btn-outline-cotri mt-2"
                            href="{{ url_for('pedidos_importados', pagina=total_paginas, **args_base) }}">
@@ -159,76 +206,33 @@
 
 <!-- MODAL DETALHES -->
 <div class="modal fade" id="modalDetalhesPedido" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered">
-    <div class="modal-content">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
 
-      <div class="modal-header bg-warning">
-        <h5 class="modal-title">Detalhes do Pedido</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
+        <div class="modal-header bg-warning">
+            <h5 class="modal-title">Detalhes do Pedido</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
 
-      <div class="modal-body" id="conteudo-detalhes">
-        Carregando...
-      </div>
+        <div class="modal-body" id="conteudo-detalhes">
+            Carregando...
+        </div>
 
-      <div class="modal-footer">
-        <button class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-      </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+        </div>
 
+        </div>
     </div>
-  </div>
 </div>
 
 <script>
-window.abrirDetalhes = async function(nnota) {
-    const modal = new bootstrap.Modal('#modalDetalhesPedido');
-    const conteudo = document.getElementById("conteudo-detalhes");
-    conteudo.innerHTML = "Carregando...";
-
-    try {
-        const resp = await fetch(`/detalhar_pedido/${nnota}`);
-        const dados = await resp.json();
-
-        let html = `
-            <h5>Pedido nº ${dados.pedido.n_nota}</h5>
-            <p><strong>Cliente:</strong> ${dados.pedido.nome_cliente || '-'}</p>
-            <hr />
-            <h6>Itens</h6>
-            <table class="table table-sm">
-                <thead>
-                    <tr>
-                        <th>Produto</th>
-                        <th>Classificação</th>
-                        <th>Qtd</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
-
-        for (const it of dados.itens) {
-
-            const cls = it.classificacao == 2
-                ? "<span class='badge bg-danger'>Agrotóxico</span>"
-                : "<span class='badge bg-success'>Normal</span>";
-
-            html += `
-                <tr>
-                    <td>${it.nome_produto}</td>
-                    <td>${cls}</td>
-                    <td>${it.quant_pedido}</td>
-                </tr>
-            `;
-        }
-
-        html += "</tbody></table>";
-        conteudo.innerHTML = html;
-        modal.show();
-
-    } catch (e) {
-        conteudo.innerHTML = "<span class='text-danger'>Erro ao carregar.</span>";
-        modal.show();
-    }
-};
+function toggleFiltros() {
+    const bloco = document.getElementById("filtrosExtras");
+    bloco.style.display = bloco.style.display === "none" ? "flex" : "none";
+}
 </script>
+
+<script src="{{ url_for('static', filename='js/pedidos_importados.js') }}"></script>
 
 {% endblock %}
