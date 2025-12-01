@@ -2,6 +2,15 @@ from typing import List, Dict, Any, Optional, Tuple
 import math
 import datetime
 
+from form_otimizacao_rota import (
+    Entrega,
+    Veiculo,
+    encontrar_melhor_rota_genetico,
+    gerar_matriz_distancias,
+)
+
+DEPOSITO_COORD_PADRAO = (-27.367681114267935, -53.40115242306388)
+
 
 class ServicoPedidosImportados:
     def __init__(self, banco_dados=None, por_pagina: int = 99999):
@@ -265,3 +274,178 @@ class ServicoPedidosImportados:
 
         rows = self._execute_select(sql, tuple(params))
         return rows[0]["total"] if rows else 0
+
+    def listar_completos_para_otimizacao(
+        self,
+        limite: int = 50,
+        cliente_id: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        try:
+            limite = max(1, min(int(limite), 500))
+        except Exception:
+            limite = 50
+
+        params = []
+        where_parts = [
+            "ec.coordenadas IS NOT NULL",
+            "ec.coordenadas <> ''",
+            "NOT EXISTS (SELECT 1 FROM ENTREGA e WHERE e.pedido_n_nota = p.n_nota)",
+        ]
+
+        if cliente_id:
+            where_parts.append("p.id_cliente = %s")
+            params.append(int(cliente_id))
+
+        where_sql = " WHERE " + " AND ".join(where_parts)
+
+        query = f"""
+            SELECT
+                p.n_nota,
+                p.dt_nota,
+                c.nome_cliente,
+                ec.cidade,
+                ec.bairro,
+                ec.tipo_logradouro,
+                ec.numero,
+                ec.coordenadas
+            FROM PEDIDO p
+            LEFT JOIN CLIENTE c ON c.id_cliente = p.id_cliente
+            LEFT JOIN ENDERECO_CLIENTE ec ON ec.id_endereco = p.id_endereco
+            {where_sql}
+            ORDER BY p.dt_nota DESC NULLS LAST, p.n_nota DESC
+            LIMIT %s;
+        """
+
+        params.append(limite)
+        rows = self._execute_select(query, tuple(params))
+        return [self._map_pedido(r) for r in rows]
+
+    # -----------------------------------------------------
+    # OTIMIZA��O DE ROTAS
+    # -----------------------------------------------------
+    def _parse_coordenadas(self, coordenadas: Optional[str]) -> Optional[Tuple[float, float]]:
+        if not coordenadas:
+            return None
+        try:
+            lat_str, lng_str = str(coordenadas).split(",")
+            return float(lat_str.strip()), float(lng_str.strip())
+        except Exception:
+            return None
+
+    def _buscar_resumo_pedidos_para_otimizacao(self, pedido_ids: List[int]) -> List[Dict[str, Any]]:
+        if not pedido_ids:
+            return []
+
+        placeholders = ",".join(["%s"] * len(pedido_ids))
+        query = f"""
+            SELECT
+                p.n_nota,
+                ec.coordenadas,
+                COALESCE(SUM(pp.quant_pedido * COALESCE(pr.peso, 0)), 0) AS peso_total,
+                COALESCE(MAX(CASE WHEN pr.classificacao = 2 THEN 2 ELSE 1 END), 1) AS tipo_carga
+            FROM PEDIDO p
+            LEFT JOIN ENDERECO_CLIENTE ec ON ec.id_endereco = p.id_endereco
+            LEFT JOIN PRODUTO_PEDIDO pp ON pp.pedido_n_nota = p.n_nota
+            LEFT JOIN PRODUTO pr ON pr.id_produto = pp.produto_id_produto
+            WHERE p.n_nota IN ({placeholders})
+            GROUP BY p.n_nota, ec.coordenadas;
+        """
+        return self._execute_select(query, tuple(pedido_ids))
+
+    def _buscar_veiculos_para_otimizacao(self) -> List[Veiculo]:
+        query = """
+            SELECT placa, limite_peso, tipo_carga
+            FROM VEICULO
+            WHERE tipo_carga <> 99
+        """
+        rows = self._execute_select(query)
+
+        veiculos = []
+        for r in rows:
+            try:
+                veiculos.append(
+                    Veiculo(
+                        id=str(r.get("placa")),
+                        limite_peso=float(r.get("limite_peso") or 0.0),
+                        tipo_carga=int(r.get("tipo_carga") or 1),
+                    )
+                )
+            except Exception:
+                continue
+        return veiculos
+
+    def otimizar_rotas(
+        self,
+        pedido_ids: List[int],
+        deposito: Optional[Tuple[float, float]] = None,
+        parametros_algoritmo: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        if not pedido_ids:
+            raise ValueError("Nenhum pedido informado para otimizar.")
+
+        if deposito is None:
+            deposito = DEPOSITO_COORD_PADRAO
+
+        if not deposito or len(deposito) != 2:
+            raise ValueError("Coordenadas do deposito invalidas.")
+
+        try:
+            deposito_lat = float(deposito[0])
+            deposito_lng = float(deposito[1])
+        except Exception:
+            raise ValueError("Coordenadas do deposito invalidas.")
+
+        pedidos_resumo = self._buscar_resumo_pedidos_para_otimizacao(pedido_ids)
+        veiculos = self._buscar_veiculos_para_otimizacao()
+
+        if not veiculos:
+            raise ValueError("Nenhum veiculo cadastrado para otimizar rotas.")
+
+        coordenadas: List[Tuple[float, float]] = [(deposito_lat, deposito_lng)]
+        entregas: List[Entrega] = []
+        pedidos_sem_coord = []
+
+        for idx, pedido in enumerate(pedidos_resumo, start=1):
+            coords = self._parse_coordenadas(pedido.get("coordenadas"))
+            if not coords:
+                pedidos_sem_coord.append(pedido.get("n_nota"))
+                continue
+
+            coordenadas.append(coords)
+            entregas.append(
+                Entrega(
+                    id=str(pedido.get("n_nota")),
+                    peso=float(pedido.get("peso_total") or 0.0),
+                    tipo_carga=int(pedido.get("tipo_carga") or 1),
+                    indice_matriz=idx,
+                )
+            )
+
+        if not entregas:
+            raise ValueError("Nenhum pedido com coordenadas validas para otimizar.")
+
+        matriz = gerar_matriz_distancias(coordenadas)
+        params = parametros_algoritmo or {}
+
+        resultado = encontrar_melhor_rota_genetico(
+            matriz,
+            entregas,
+            veiculos,
+            deposito=0,
+            tamanho_populacao=int(params.get("tamanho_populacao", 60)),
+            geracoes=int(params.get("geracoes", 150)),
+            taxa_mutacao=float(params.get("taxa_mutacao", 0.12)),
+            tamanho_torneio=int(params.get("tamanho_torneio", 3)),
+        )
+
+        mapa_indices = {e.id: e.indice_matriz for e in entregas}
+
+        resultado.update(
+            {
+                "coordenadas_usadas": coordenadas,
+                "pedidos_considerados": [e.id for e in entregas],
+                "pedidos_sem_coordenadas": pedidos_sem_coord,
+                "mapa_indices": mapa_indices,
+            }
+        )
+        return resultado

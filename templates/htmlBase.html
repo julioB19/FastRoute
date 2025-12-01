@@ -251,6 +251,16 @@
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a href="{{ url_for('pagina_otimizacao_rotas') }}" class="nav-link {% if request.endpoint == 'pagina_otimizacao_rotas' %}active{% endif %}">
+                        <i class="bi bi-geo-alt"></i> <span>Otimização de Rotas</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{{ url_for('rotas_otimizadas') }}" class="nav-link {% if request.endpoint == 'rotas_otimizadas' %}active{% endif %}">
+                        <i class="bi bi-map"></i> <span>Rotas Otimizadas</span>
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a href="{{ url_for('pagina_veiculos') }}" class="nav-link {% if request.endpoint == 'pagina_veiculos' %}active{% endif %}">
                         <i class="bi bi-truck"></i> <span>Veiculos</span>
                     </a>

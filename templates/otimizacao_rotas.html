@@ -1,0 +1,152 @@
+{% extends "htmlBase.html" %}
+{% block titulo %}FastRoute - Otimização de Rotas{% endblock %}
+
+{% block conteudo %}
+<div class="container-fluid mt-3 px-3 px-md-4">
+    <div class="row mb-3">
+        <div class="col-12 d-flex justify-content-between align-items-center">
+            <div>
+                <h4 class="mb-1" style="color: rgb(237, 194, 0);">Otimização de Rotas</h4>
+                <small class="text-muted">Depósito padrão: {{ deposito_coord[0] }}, {{ deposito_coord[1] }}</small>
+            </div>
+            <button id="btnOtimizarRotas" class="btn btn-success">
+                <i class="bi bi-lightning-charge"></i> Otimizar Selecionados
+            </button>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-body">
+            <form method="get" action="{{ url_for('pagina_otimizacao_rotas') }}" class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label text-dark">Cliente</label>
+                    <select name="cliente_id" class="form-select">
+                        <option value="">Todos</option>
+                        {% for c in clientes %}
+                        <option value="{{ c.id }}" {% if cliente_id and c.id == cliente_id %}selected{% endif %}>{{ c.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-dark">Quantidade de pedidos (limite)</label>
+                    <input type="number" name="limite" class="form-control" min="1" max="500" value="{{ limite or 50 }}">
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button class="btn btn-cotri" type="submit">Aplicar filtros</button>
+                    <a class="btn btn-outline-light ms-2" href="{{ url_for('pagina_otimizacao_rotas') }}">Limpar</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 50px;">#</th>
+                            <th>Nº da Nota</th>
+                            <th>Cliente</th>
+                            <th>Endereço</th>
+                            <th>Data</th>
+                            <th>Coordenadas</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if pedidos %}
+                            {% for p in pedidos %}
+                            <tr data-pedido-id="{{ p.id }}" data-coords="{{ p._orig.coordenadas }}">
+                                <td>
+                                    <input type="checkbox" class="form-check-input selecionar-pedido" checked>
+                                </td>
+                                <td>{{ p.numero_pedido }}</td>
+                                <td>{{ p.cliente }}</td>
+                                <td>{{ p.endereco }}</td>
+                                <td>{{ p.data_nota | data_br }}</td>
+                                <td>{{ p._orig.coordenadas }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center py-4">Nenhum pedido completo encontrado.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const btn = document.getElementById("btnOtimizarRotas");
+    const deposito = { lat: {{ deposito_coord[0] }}, lng: {{ deposito_coord[1] }} };
+
+    btn.addEventListener("click", async () => {
+        const selecionados = Array.from(document.querySelectorAll("tr[data-pedido-id]"))
+            .filter((tr) => tr.querySelector(".selecionar-pedido")?.checked)
+            .filter((tr) => (tr.dataset.coords || "").trim() !== "")
+            .map((tr) => parseInt(tr.dataset.pedidoId, 10))
+            .filter((id) => Number.isFinite(id));
+
+        if (!selecionados.length) {
+            Swal.fire('Atenção', 'Selecione ao menos um pedido com coordenadas.', 'warning');
+            return;
+        }
+
+        const textoOriginal = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Otimizando...";
+
+        try {
+            const resp = await fetch("/otimizar_rotas", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    pedido_ids: selecionados,
+                    deposito: deposito,
+                }),
+            });
+            const resultado = await resp.json();
+
+            if (!resp.ok) {
+                Swal.fire('Erro', resultado.erro || 'Erro ao otimizar rotas.', 'error');
+                return;
+            }
+
+            const rotas = resultado.rotas_por_veiculo || {};
+            const resumoRotas = Object.entries(rotas)
+                .map(([veiculo, entregas]) => `${veiculo}: ${entregas && entregas.length ? entregas.join(" -> ") : "Sem entregas"}`)
+                .join("<br>");
+            const distancia = resultado.distancia_total_km
+                ? Number.parseFloat(resultado.distancia_total_km).toFixed(2)
+                : "0.00";
+
+            Swal.fire({
+                title: 'Rotas otimizadas',
+                html: `
+                    <p><strong>Distância total estimada:</strong> ${distancia} km</p>
+                    <p><strong>Resumo:</strong><br><span style="white-space:pre-wrap;text-align:left;display:block;">${resumoRotas}</span></p>
+                `,
+                icon: 'success',
+                showCancelButton: true,
+                confirmButtonText: 'Ver relatório',
+                cancelButtonText: 'Fechar',
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = "/rotas_otimizadas";
+                }
+            });
+        } catch (err) {
+            console.error(err);
+            Swal.fire('Erro', 'Falha ao comunicar com o otimizador de rotas.', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerText = textoOriginal;
+        }
+    });
+});
+</script>
+{% endblock %}

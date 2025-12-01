@@ -229,6 +229,81 @@ window.abrirDetalhes = async function(nnota) {
         modal.show();
     }
 };
+
+document.addEventListener("DOMContentLoaded", () => {
+    const btnOtimizar = document.getElementById("btnOtimizarRotas");
+    if (!btnOtimizar) {
+        return;
+    }
+
+    btnOtimizar.addEventListener("click", async () => {
+        const linhas = Array.from(document.querySelectorAll("table tbody tr[data-pedido-id]"));
+        const pedidosIds = linhas
+            .map((linha) => ({
+                id: linha.dataset.pedidoId,
+                coords: linha.dataset.coords,
+            }))
+            .filter((item) => item.coords && item.coords.trim() !== "")
+            .map((item) => parseInt(item.id, 10))
+            .filter((id) => Number.isFinite(id));
+
+        if (pedidosIds.length === 0) {
+            alert("Nenhum pedido com coordenadas para otimizar.");
+            return;
+        }
+
+        const depositoInput = prompt("Informe as coordenadas do deposito (lat,lng):");
+        if (!depositoInput) {
+            return;
+        }
+
+        const [latStr, lngStr] = depositoInput.split(",").map((v) => v.trim());
+        const depositoLat = parseFloat(latStr);
+        const depositoLng = parseFloat(lngStr);
+        if (!Number.isFinite(depositoLat) || !Number.isFinite(depositoLng)) {
+            alert("Coordenadas do deposito invalidas.");
+            return;
+        }
+
+        const textoOriginal = btnOtimizar.innerText;
+        btnOtimizar.disabled = true;
+        btnOtimizar.innerText = "Otimizando...";
+
+        try {
+            const resp = await fetch("/otimizar_rotas", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    pedido_ids: pedidosIds,
+                    deposito: { lat: depositoLat, lng: depositoLng },
+                }),
+            });
+
+            const resultado = await resp.json();
+            if (!resp.ok) {
+                alert(resultado.erro || "Erro ao otimizar rotas.");
+                return;
+            }
+
+            const rotas = resultado.rotas_por_veiculo || {};
+            const resumoRotas = Object.entries(rotas)
+                .map(([veiculo, entregas]) => `${veiculo}: ${entregas && entregas.length ? entregas.join(" -> ") : "Sem entregas"}`)
+                .join("\\n");
+            const distancia = resultado.distancia_total_km
+                ? Number.parseFloat(resultado.distancia_total_km).toFixed(2)
+                : "0.00";
+
+            alert(`Distancia total estimada: ${distancia} km\\n\\nRotas:\\n${resumoRotas}`);
+            console.log("Resultado da otimizacao", resultado);
+        } catch (err) {
+            console.error(err);
+            alert("Falha ao comunicar com o otimizador de rotas.");
+        } finally {
+            btnOtimizar.disabled = false;
+            btnOtimizar.innerText = textoOriginal;
+        }
+    });
+});
 </script>
 
 {% endblock %}

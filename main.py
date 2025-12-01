@@ -6,18 +6,21 @@ from form_cadastro_veiculos import ServicoVeiculo
 from form_cadastro_usuarios import ServicoUsuario
 from form_pedidos_importados import ServicoPedidosImportados
 from jinja2 import TemplateNotFound
+import json
 import re
 
 app = Flask(__name__)
 app.secret_key = 'fastrout'  # Troque para uma chave mais segura em producao
 
+DEPOSITO_COORD = (-27.367681114267935, -53.40115242306388)
+
 # Config BG
 DB_USER = "postgres"
-#DB_PASSWORD = "fastrout"
-DB_PASSWORD = "1234"
+DB_PASSWORD = "fastrout"
+#DB_PASSWORD = "1234"
 DB_HOST = "localhost"
-#DB_PORT = "3380"
-DB_PORT = "5433"
+DB_PORT = "3380"
+#DB_PORT = "5433"
 DB_NAME = "FastRoute"
 
 config_banco = ConfiguracaoBanco(DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT)
@@ -362,9 +365,141 @@ def detalhar_pedido(n_nota):
 
     return {"pedido": pedido, "itens": itens}
 
+@app.route('/otimizacao_rotas')
+@login_obrigatorio
+def pagina_otimizacao_rotas():
+    cliente_id = request.args.get('cliente_id', type=int)
+    limite = request.args.get('limite', default=50, type=int)
+
+    pedidos = servico_pedidos.listar_completos_para_otimizacao(
+        limite=limite,
+        cliente_id=cliente_id,
+    )
+    clientes = servico_pedidos.buscar_clientes()
+
+    return render_template(
+        'otimizacao_rotas.html',
+        usuario=session.get('usuario_nome'),
+        cargo=session.get('usuario_cargo'),
+        pedidos=pedidos,
+        clientes=clientes,
+        limite=limite,
+        cliente_id=cliente_id,
+        deposito_coord=DEPOSITO_COORD,
+    )
+
+@app.route('/rotas_otimizadas')
+@login_obrigatorio
+def rotas_otimizadas():
+    dados = session.get("ultima_otimizacao") or {}
+    rotas = dados.get("rotas_por_veiculo", {})
+    distancia = dados.get("distancia_total_km", 0.0)
+    pedidos = dados.get("pedidos_considerados", [])
+    pedidos_sem = dados.get("pedidos_sem_coordenadas", [])
+    clientes_por_pedido = dados.get("clientes_por_pedido", {})
+
+    filtro_nota = (request.args.get("nota") or "").strip().lower()
+    filtro_cliente = (request.args.get("cliente") or "").strip().lower()
+    filtro_veiculo = (request.args.get("veiculo") or "").strip().lower()
+
+    rotas_filtradas = {}
+    for veic, seq in rotas.items():
+        veic_ok = True
+        nota_ok = True
+        cliente_ok = True
+
+        if filtro_veiculo:
+            veic_ok = filtro_veiculo in str(veic).lower()
+
+        if filtro_nota:
+            nota_ok = any(filtro_nota in str(n) for n in (seq or []))
+
+        if filtro_cliente:
+            cliente_ok = any(
+                filtro_cliente in (clientes_por_pedido.get(str(n), "") or "").lower()
+                for n in (seq or [])
+            )
+
+        if veic_ok and nota_ok and cliente_ok:
+            rotas_filtradas[veic] = seq
+
+    return render_template(
+        'rotas_otimizadas.html',
+        usuario=session.get('usuario_nome'),
+        cargo=session.get('usuario_cargo'),
+        rotas=rotas_filtradas,
+        distancia=distancia,
+        pedidos_considerados=pedidos,
+        pedidos_sem_coordenadas=pedidos_sem,
+        filtro_nota=filtro_nota,
+        filtro_cliente=filtro_cliente,
+        filtro_veiculo=filtro_veiculo,
+    )
+
+@app.route("/otimizar_rotas", methods=["POST"])
+@login_obrigatorio
+def otimizar_rotas():
+    payload = request.get_json(silent=True) or {}
+    pedido_ids = payload.get("pedido_ids") or []
+    deposito_payload = payload.get("deposito") or {}
+    parametros_algoritmo = payload.get("parametros") or {}
+
+    if not isinstance(pedido_ids, list):
+        return jsonify({"erro": "pedido_ids deve ser uma lista de notas/pedidos."}), 400
+
+    try:
+        pedido_ids = [int(pid) for pid in pedido_ids]
+    except Exception:
+        return jsonify({"erro": "pedido_ids contem valores invalidos."}), 400
+
+    deposito_tuple = None
+    if isinstance(deposito_payload, dict):
+        deposito_tuple = (deposito_payload.get("lat"), deposito_payload.get("lng"))
+    elif isinstance(deposito_payload, (list, tuple)) and len(deposito_payload) >= 2:
+        deposito_tuple = (deposito_payload[0], deposito_payload[1])
+
+    if not deposito_tuple or deposito_tuple[0] is None or deposito_tuple[1] is None:
+        deposito_tuple = DEPOSITO_COORD
+
+    try:
+        resultado = servico_pedidos.otimizar_rotas(
+            pedido_ids, deposito_tuple, parametros_algoritmo
+        )
+        # guarda resultado na sessao para consulta posterior
+        try:
+            clientes_por_pedido = {}
+            for pid in pedido_ids:
+                try:
+                    pedido_info = servico_pedidos.buscar_pedido_por_id(pid)
+                    if pedido_info:
+                        clientes_por_pedido[str(pid)] = pedido_info.get("nome_cliente") or ""
+                except Exception:
+                    continue
+
+            serializado = {
+                "rotas_por_veiculo": resultado.get("rotas_por_veiculo", {}),
+                "distancia_total_km": float(resultado.get("distancia_total_km", 0.0)),
+                "custo_fitness": float(resultado.get("custo_fitness", 0.0)),
+                "coordenadas_usadas": [
+                    [float(c[0]), float(c[1])] for c in resultado.get("coordenadas_usadas", [])
+                ],
+                "pedidos_considerados": resultado.get("pedidos_considerados", []),
+                "pedidos_sem_coordenadas": resultado.get("pedidos_sem_coordenadas", []),
+                "mapa_indices": resultado.get("mapa_indices", {}),
+                "clientes_por_pedido": clientes_por_pedido,
+            }
+            session["ultima_otimizacao"] = serializado
+        except Exception as e:
+            print("Nao foi possivel armazenar resultado de otimizacao na sessao:", e)
+        return jsonify(resultado)
+    except ValueError as e:
+        return jsonify({"erro": str(e)}), 400
+    except Exception as e:
+        print("Erro ao otimizar rotas:", e)
+        return jsonify({"erro": "Falha interna ao otimizar rotas."}), 500
 
 # -----------------------------
-# RELATÓRIOS
+# RELATORIOS
 # -----------------------------
 @app.route('/relatorios')
 @login_obrigatorio
