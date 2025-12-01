@@ -10,6 +10,43 @@
     padding: 12px;
 }
 
+.pagination-cotri .page-link {
+    color: var(--verde-medio);
+    border-color: var(--verde-claro);
+    background: #fff;
+}
+
+.pagination-cotri .page-link:hover {
+    color: #fff;
+    background: linear-gradient(90deg, var(--verde-claro), var(--verde-medio));
+    border-color: var(--verde-medio);
+}
+
+.pagination-cotri .page-item.active .page-link {
+    color: #fff;
+    background: linear-gradient(90deg, var(--verde-claro), var(--verde-medio));
+    border-color: var(--verde-medio);
+    box-shadow: 0 8px 20px rgba(15, 81, 50, 0.25);
+}
+
+.pagination-cotri .page-item.disabled .page-link {
+    color: #9ba1a6;
+    border-color: var(--cinza-borda);
+    background: #f1f2f3;
+}
+
+.btn-outline-cotri {
+    color: var(--verde-medio);
+    border-color: var(--verde-claro);
+    background: transparent;
+}
+
+.btn-outline-cotri:hover {
+    color: #fff;
+    background: linear-gradient(90deg, var(--verde-claro), var(--verde-medio));
+    border-color: var(--verde-medio);
+}
+
 @media (max-width: 767px) {
     .card .table-responsive {
         padding: 6px;

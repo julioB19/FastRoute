@@ -20,25 +20,6 @@
             --cinza-borda: #e5e5e5;
             --texto: #1f2933;
         }
-        .nav-link.logout {
-            background: transparent !important;
-        }
-        .nav-link.logout:hover {
-            background: rgba(255,255,255,0.12) !important;
-        }
-        .sidebar-logout {
-            background: transparent;
-            color: #f2f2f2;
-            border: 1px solid rgba(255,255,255,0.25);
-        }
-        .sidebar-logout:hover {
-            background: rgba(255,255,255,0.12);
-            color: #fff;
-            border-color: rgba(255,255,255,0.4);
-        }
-        .sidebar-logout i {
-            font-size: 1.1rem;
-        }
 
         body {
             font-family: "Poppins", "Segoe UI", sans-serif;
@@ -132,7 +113,11 @@
         }
 
         .nav-link:hover {
-            background: rgba(255,255,255,0.12);
+            background: rgba(242,194,0,0.18);
+            color: var(--amarelo);
+        }
+        .nav-link:hover i {
+            color: var(--amarelo);
         }
 
         .sidebar-user {
@@ -296,11 +281,12 @@
                 </div>
             </div>
 
-            <a href="{{ url_for('realizar_logout') }}" class="btn btn-sm sidebar-logout" style="border-radius: 8px; padding: 4px 8px;">
-                <i class="bi bi-box-arrow-right"></i>
+            <a href="{{ url_for('realizar_logout') }}"
+            class="text-white"
+            style="background: transparent; border: none; padding: 4px 6px;">
+                <i class="bi bi-box-arrow-right" style="font-size: 1.2rem;"></i>
             </a>
         </div>
-
     </div>
 
     <main id="mainContent" class="main-content">

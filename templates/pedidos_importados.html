@@ -28,7 +28,7 @@
                 <option value="todos" {% if filtro == 'todos' %}selected{% endif %}>Todos</option>
                 <option value="completos" {% if filtro == 'completos' %}selected{% endif %}>Completos</option>
                 <option value="incompletos" {% if filtro == 'incompletos' %}selected{% endif %}>Incompletos</option>
-                <option value="entregue" {% if filtro == 'entregues' %}selected{% endif %}>Entregues</option>
+                <option value="entregues" {% if filtro == 'entregues' %}selected{% endif %}>Entregues</option>
             </select>
         </div>
 
@@ -77,7 +77,7 @@
                                     <td>{{ p.numero_pedido }}</td>
                                     <td>{{ p.cliente }}</td>
                                     <td>{{ p.endereco }}</td>
-                                    <td>{{ p.data_nota or '-' }}</td>
+                                    <td>{{ p.data_nota | data_br }}</td>
 
                                     <td>
                                         {% if p.status == 'COMPLETO' %}
@@ -112,7 +112,7 @@
                 {% if total_paginas > 1 %}
                 <nav class="mt-3">
 
-                    <ul class="pagination justify-content-center">
+                    <ul class="pagination justify-content-center pagination-cotri">
 
                         {% set args_base = request.args.to_dict() %}
                         {% set _ = args_base.pop('pagina', None) %}
@@ -144,7 +144,7 @@
 
                     <!-- Botão Ir para Última Página -->
                     <div class="text-center">
-                        <a class="btn btn-outline-primary mt-2"
+                        <a class="btn btn-outline-cotri mt-2"
                            href="{{ url_for('pedidos_importados', pagina=total_paginas, **args_base) }}">
                             Ir para última página ({{ total_paginas }})
                         </a>

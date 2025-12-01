@@ -60,15 +60,14 @@
 
 .mini-compact-calendar {
     width: 100%;
-    height: 295px;
     box-sizing: border-box;
     padding: 8px;
     background: #ffffff;
     border-radius: 10px;
     display: grid;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto auto;
     gap: 6px;
-    overflow: hidden;
+    overflow: visible !important;
 }
 
 /* Cabeçalho */
@@ -90,7 +89,7 @@
     grid-auto-rows: 38px;
     gap: 2px;
     width: 100%;
-    height: calc(100% - 34px);
+    height: auto !important;
     box-sizing: border-box;
 }
 
@@ -157,14 +156,32 @@
     line-height: 1;
 }
 
+/* Dia com entrega */
+.mc-day.entrega {
+    background: rgba(30, 136, 229, 0.18) !important; /* azul claro */
+    border: 2px solid #1e88e5 !important;            /* azul */
+    border-radius: 6px;
+    position: relative;
+}
+
+.mc-day.entrega .mc-num {
+    font-weight: 700;
+    color: #0d47a1; /* azul escuro */
+}
+
 /* RESPONSIVO */
 @media (max-width: 420px) {
     .mini-compact-calendar .mc-grid {
         grid-auto-rows: 34px;
     }
     .mini-compact-calendar {
-        height: 280px;
+        padding: 6px;
     }
+}
+
+/* Garantir que não corte a última semana */
+#miniCompactCalendario {
+    overflow: visible !important;
 }
 
 /* =======================
@@ -229,4 +246,36 @@
     color: #1b5e20;
     margin-bottom: 12px;
     font-size: 1.3rem;
+}
+
+/* =======================
+   NOVA BARRA DE FILTROS (BOTÕES ESTILIZADOS)
+   ======================= */
+
+.filtro-mapa-bar {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 12px;
+}
+
+.filtro-btn {
+    padding: 8px 18px;
+    border-radius: 20px;
+    border: 2px solid var(--verde-escuro);
+    background: #ffffff;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--verde-escuro);
+    transition: all .25s ease;
+}
+
+.filtro-btn:hover {
+    background: var(--verde-escuro);
+    color: white;
+}
+
+.filtro-btn.active {
+    background: var(--verde-escuro);
+    color: white;
 }

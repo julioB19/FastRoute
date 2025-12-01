@@ -91,16 +91,33 @@ def realizar_logout():
 @login_obrigatorio
 def home():
     # Totais para o dashboard
-    total_completos = servico_pedidos.contar_completos()
+    total_completos = servico_pedidos.contar_com_filtros({
+        "coords_not_null": True,
+        "excluir_entregues": True
+    })
     total_incompletos = servico_pedidos.contar_incompletos()
+
+    # contar entregas no último mês - exemplo simples (você pode ajustar)
+    entregas_ultimo_mes = 0
+    try:
+        # consulta simples — pode ser trocada por método do serviço
+        q = """
+            SELECT COUNT(DISTINCT DATE(e.data_entrega)) AS total
+            FROM ENTREGA e
+            WHERE e.data_entrega >= (CURRENT_DATE - INTERVAL '30 days');
+        """
+        rows = servico_pedidos._execute_select(q)
+        entregas_ultimo_mes = rows[0]["total"] if rows else 0
+    except Exception:
+        entregas_ultimo_mes = 0
 
     return render_template(
         'home.html',
         usuario=session.get('usuario_nome'),
         cargo=session.get('usuario_cargo'),
         total_pedidos=total_completos,         # BLOCO 1
-        pedidos_incompletos=total_incompletos # BLOCO 2
-
+        pedidos_incompletos=total_incompletos, # BLOCO 2
+        entregas_ultimo_mes=entregas_ultimo_mes
     )
 
 
@@ -296,10 +313,11 @@ def pedidos_importados():
 
     if filtro == "completos":
         filtros["coords_not_null"] = True
+        filtros["excluir_entregues"] = True
     elif filtro == "incompletos":
         filtros["coords_null"] = True
-    elif filtro == "entregue":
-        filtros["entregue"] = True
+    elif filtro == "entregues":
+        filtros["entregues"] = True
 
     if data_nota:
         filtros["data_inicio"] = data_nota
@@ -389,6 +407,107 @@ def entregas_pendentes():
         )
     except TemplateNotFound:
         return jsonify(pag)
+
+@app.template_filter("data_br")
+def data_br(value):
+    if not value:
+        return "-"
+    try:
+        return value.strftime("%d/%m/%Y")
+    except:
+        return value  # caso já venha formatada
+
+
+@app.route("/entregas-mapa")
+@login_obrigatorio
+def entregas_mapa():
+    """
+    Retorna marcadores agregados por coordenadas.
+    Se existir pelo menos uma entrega (entregue=True) para uma coordenada,
+    o status daquela coordenada será 'ENTREGUE'. Caso contrário 'COMPLETO'.
+    """
+    query = """
+        SELECT
+            p.n_nota,
+            ec.coordenadas,
+            EXISTS(SELECT 1 FROM ENTREGA e WHERE e.pedido_n_nota = p.n_nota) AS entregue
+        FROM PEDIDO p
+        LEFT JOIN ENDERECO_CLIENTE ec ON ec.id_endereco = p.id_endereco
+        WHERE ec.coordenadas IS NOT NULL
+        AND ec.coordenadas <> '';
+    """
+
+    rows = servico_pedidos._execute_select(query)
+
+    # Agregamos por coordenadas para evitar múltiplos marcadores sobrepostos
+    agregados = {}  # chave = coords, valor = dict { lat, lng, n_notas: [..], status }
+    for r in rows:
+        coords = r.get("coordenadas")
+        if not coords:
+            continue
+        try:
+            lat, lng = map(float, coords.split(","))
+        except Exception:
+            continue
+
+        key = f"{lat:.6f},{lng:.6f}"
+        entregado = bool(r.get("entregue"))
+
+        current = agregados.get(key)
+        if not current:
+            agregados[key] = {
+                "lat": lat,
+                "lng": lng,
+                "n_notas": [r.get("n_nota")],
+                # se qualquer um for entregue, marca ENTREGUE
+                "status": "ENTREGUE" if entregado else "COMPLETO"
+            }
+        else:
+            # append nota
+            current["n_notas"].append(r.get("n_nota"))
+            # se algum for entregue, força ENTREGUE
+            if entregado:
+                current["status"] = "ENTREGUE"
+
+    marcadores = []
+    for v in agregados.values():
+        marcadores.append({
+            "n_notas": v["n_notas"],            # agora pode ser lista
+            "lat": v["lat"],
+            "lng": v["lng"],
+            "status": v["status"]
+        })
+
+    return jsonify(marcadores)
+
+
+@app.route("/entregas-datas")
+@login_obrigatorio
+def entregas_datas():
+    """
+    Retorna lista distinta de datas em que ocorreram entregas
+    no formato YYYY-MM-DD, para o calendário marcar.
+    """
+    query = """
+        SELECT DISTINCT DATE(e.data_entrega) AS data_entrega
+        FROM ENTREGA e
+        WHERE e.data_entrega IS NOT NULL
+        ORDER BY data_entrega;
+    """
+
+    rows = servico_pedidos._execute_select(query)
+
+    datas = []
+    for r in rows:
+        # r["data_entrega"] pode ser datetime.date/datetime
+        dt = r.get("data_entrega")
+        try:
+            datas.append({"start": dt.strftime("%Y-%m-%d")})
+        except Exception:
+            # se já for string
+            datas.append({"start": str(dt)})
+
+    return jsonify(datas)
 
 
 # -----------------------------

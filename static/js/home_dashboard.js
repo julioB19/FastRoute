@@ -1,5 +1,23 @@
 // ======================
-//  Calendário Ultra-Compacto
+//  ÍCONES PERSONALIZADOS (PIN VERDE E PIN AZUL)
+// ======================
+
+const pinVerde = L.icon({
+    iconUrl: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="%23009035" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 6-9 13-9 13S3 16 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+    iconSize: [32, 32],
+    iconAnchor: [16, 32],
+    popupAnchor: [0, -30]
+});
+
+const pinAzul = L.icon({
+    iconUrl: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="%23005cc5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 6-9 13-9 13S3 16 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+    iconSize: [32, 32],
+    iconAnchor: [16, 32],
+    popupAnchor: [0, -30]
+});
+
+// ======================
+//  CALENDÁRIO ULTRA-COMPACTO
 // ======================
 
 (function () {
@@ -9,9 +27,10 @@
     }
 
     function sameDate(a, b) {
-        return a.getFullYear() === b.getFullYear() &&
-               a.getMonth() === b.getMonth() &&
-               a.getDate() === b.getDate();
+        // compara pelas partes UTC para evitar problemas com timezones
+        return a.getUTCFullYear() === b.getUTCFullYear() &&
+               a.getUTCMonth() === b.getUTCMonth() &&
+               a.getUTCDate() === b.getUTCDate();
     }
 
     function renderMiniCompactCalendar(container, year, month, eventDates) {
@@ -32,7 +51,7 @@
         const title = document.createElement('div');
         title.style.flex = '1';
         title.style.textAlign = 'center';
-        title.innerText = formatMonthName(new Date(year, month, 1));
+        title.innerText = formatMonthName(new Date(Date.UTC(year, month, 1)));
 
         header.appendChild(prevBtn);
         header.appendChild(title);
@@ -50,9 +69,21 @@
             grid.appendChild(w);
         });
 
-        const firstDay = new Date(year, month, 1).getDay();
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const firstDay = new Date(Date.UTC(year, month, 1)).getUTCDay();
+        const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
         const today = new Date();
+        const todayUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+
+        // Preprocess eventDates -> array of Date objects (UTC midnight)
+        const eventsDatesUTC = (eventDates || []).map(ed => {
+            try {
+                // ed may be string "YYYY-MM-DD" or ISO
+                const d = new Date(ed);
+                return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+            } catch (e) {
+                return null;
+            }
+        }).filter(Boolean);
 
         for (let i = 0; i < firstDay; i++) {
             const emptyCell = document.createElement('div');
@@ -64,15 +95,17 @@
             const cell = document.createElement('div');
             cell.className = 'mc-day';
 
-            const date = new Date(year, month, d);
+            const date = new Date(Date.UTC(year, month, d));
             const num = document.createElement('div');
             num.className = 'mc-num';
             num.innerText = d;
 
-            if (sameDate(date, today)) cell.classList.add('today');
+            if (sameDate(date, todayUTC)) cell.classList.add('today');
 
-            const hasEvent = eventDates.some(ed => sameDate(new Date(ed), date));
+            const hasEvent = eventsDatesUTC.some(ed => sameDate(ed, date));
             if (hasEvent) {
+                cell.classList.add("entrega"); // aplica estilo azul
+
                 const dot = document.createElement('div');
                 dot.className = 'mc-dot';
                 cell.appendChild(dot);
@@ -97,9 +130,19 @@
 
     function fetchEventsAndRender(container, year, month) {
         fetch('/entregas-datas')
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) throw new Error('Erro ao buscar datas');
+                return res.json();
+            })
             .then(events => {
-                const eventDates = (events || []).map(e => e.start);
+                // events expected like [{start: "YYYY-MM-DD"}, ...] or array of strings
+                const eventDates = (events || []).map(e => {
+                    if (typeof e === "string") return e;
+                    if (e && e.start) return e.start;
+                    if (e && e.data) return e.data;
+                    return null;
+                }).filter(Boolean);
+
                 renderMiniCompactCalendar(container, year, month, eventDates);
             })
             .catch(err => {
@@ -107,6 +150,10 @@
                 renderMiniCompactCalendar(container, year, month, []);
             });
     }
+
+    // expose a render function in case other scripts want to re-render
+    window.renderMiniCompactCalendar = renderMiniCompactCalendar;
+    window.fetchEventsAndRender = fetchEventsAndRender;
 
     document.addEventListener("DOMContentLoaded", function () {
         const el = document.getElementById('miniCompactCalendario');
@@ -128,13 +175,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (mapaEl && typeof L !== 'undefined') {
 
-        const map = L.map('miniMapa').setView([-27.358885, -53.398043], 12); //Coordenadas iniciais(Meio de FW)
+        const map = L.map('miniMapa').setView([-27.358885, -53.398043], 12);
 
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19
         }).addTo(map);
 
-        fetch('/entregas-pendentes')
+        fetch('/entregas-mapa')
             .then(res => res.json())
             .then(marcadores => {
                 const bounds = [];
@@ -142,8 +189,21 @@ document.addEventListener("DOMContentLoaded", function () {
                 marcadores.forEach(m => {
                     if (!m.lat || !m.lng) return;
 
-                    const marker = L.marker([m.lat, m.lng]).addTo(map);
-                    marker.bindPopup(m.n_nota ? `Pedido ${m.n_nota}` : 'Entrega pendente');
+                    const status = (m.status || "").toUpperCase();
+                    const icone = status === "ENTREGUE" ? pinAzul : pinVerde;
+
+                    const marker = L.marker([m.lat, m.lng], { icon: icone }).addTo(map);
+
+                    // se entregue, traz marcador para frente (visível sobrepostos)
+                    if (status === "ENTREGUE" && typeof marker.bringToFront === "function") {
+                        marker.bringToFront();
+                    } else if (status === "ENTREGUE" && marker.setZIndexOffset) {
+                        marker.setZIndexOffset(1000);
+                    }
+
+                    // bind popup com possíveis múltiplas notas
+                    let notas = Array.isArray(m.n_notas) ? m.n_notas.join(", ") : (m.n_notas || m.n_nota || "");
+                    marker.bindPopup(`Pedidos: ${notas}<br>Status: ${status}`);
 
                     bounds.push([m.lat, m.lng]);
                 });
@@ -156,7 +216,7 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 // ======================
-//  MAPA EXPANDIDO (BOTÃO)
+//  MAPA EXPANDIDO
 // ======================
 
 document.addEventListener("DOMContentLoaded", function () {
@@ -165,53 +225,105 @@ document.addEventListener("DOMContentLoaded", function () {
     const overlay = document.getElementById("overlayMapa");
     const fechar = document.getElementById("fecharOverlayMapa");
 
-    if (!btnAbrir || !overlay || !fechar) {
-        console.error("Elemento do mapa expandido não encontrado.");
-        return;
-    }
+    const filtroTodos = document.getElementById("filtroTodos");
+    const filtroCompletos = document.getElementById("filtroCompletos");
+    const filtroEntregues = document.getElementById("filtroEntregues");
 
     let mapaExpandido = null;
+    let marcadoresLayer = null;
 
+    // Marca botão ativo
+    function ativarBotao(btn) {
+        document.querySelectorAll(".filtro-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+    }
+
+    function carregarMarcadores(filtro = "TODOS") {
+
+        if (!mapaExpandido) return;
+
+        if (marcadoresLayer) {
+            mapaExpandido.removeLayer(marcadoresLayer);
+        }
+
+        marcadoresLayer = L.layerGroup().addTo(mapaExpandido);
+
+        fetch('/entregas-mapa')
+            .then(res => res.json())
+            .then(marcadores => {
+                const bounds = [];
+
+                marcadores.forEach(m => {
+                    if (!m.lat || !m.lng) return;
+
+                    const status = (m.status || "").toUpperCase();
+
+                    // FILTRAGEM CORRETA
+                    if (filtro === "COMPLETOS" && status !== "COMPLETO") return;
+                    if (filtro === "ENTREGUES" && status !== "ENTREGUE") return;
+                    // filtro "TODOS" -> não filtra nada (passa tudo)
+
+                    const icone = status === "ENTREGUE" ? pinAzul : pinVerde;
+
+                    const marker = L.marker([m.lat, m.lng], { icon: icone }).addTo(marcadoresLayer);
+
+                    // traz entregues para frente para evitar que apareça verde por cima do azul
+                    if (status === "ENTREGUE" && typeof marker.bringToFront === "function") {
+                        marker.bringToFront();
+                    } else if (status === "ENTREGUE" && marker.setZIndexOffset) {
+                        marker.setZIndexOffset(1000);
+                    }
+
+                    let notas = Array.isArray(m.n_notas) ? m.n_notas.join(", ") : (m.n_notas || m.n_nota || "");
+                    marker.bindPopup(`Pedidos: ${notas}<br>Status: ${status}`);
+
+                    bounds.push([m.lat, m.lng]);
+                });
+
+                if (bounds.length > 0) {
+                    mapaExpandido.fitBounds(bounds, { padding: [30, 30] });
+                }
+            });
+    }
+
+    // Abrir overlay
     btnAbrir.addEventListener("click", () => {
-
         overlay.style.display = "flex";
 
         setTimeout(() => {
-
             if (!mapaExpandido) {
-
                 mapaExpandido = L.map("mapaExpandido").setView([-27.358885, -53.398043], 12);
 
                 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
                     maxZoom: 19
                 }).addTo(mapaExpandido);
 
-                fetch("/entregas-pendentes")
-                    .then(res => res.json())
-                    .then(marcadores => {
-                        const bounds = [];
-
-                        marcadores.forEach(m => {
-                            if (!m.lat || !m.lng) return;
-
-                            const marker = L.marker([m.lat, m.lng]).addTo(mapaExpandido);
-                            marker.bindPopup(m.n_nota ? `Pedido ${m.n_nota}` : "Entrega pendente");
-                            bounds.push([m.lat, m.lng]);
-                        });
-
-                        if (bounds.length > 0) {
-                            mapaExpandido.fitBounds(bounds, { padding: [30, 30] });
-                        }
-                    });
-
+                ativarBotao(filtroTodos);
+                carregarMarcadores("TODOS");
             } else {
                 mapaExpandido.invalidateSize();
             }
-
         }, 200);
     });
 
+    // Fechar overlay
     fechar.addEventListener("click", () => {
         overlay.style.display = "none";
+    });
+
+    // Filtros
+    filtroTodos.addEventListener("click", () => {
+        ativarBotao(filtroTodos);
+        carregarMarcadores("TODOS");
+    });
+
+    filtroCompletos.addEventListener("click", () => {
+        ativarBotao(filtroCompletos);
+        carregarMarcadores("COMPLETOS");
+    });
+
+    filtroEntregues.addEventListener("click", () => {
+        ativarBotao(filtroEntregues);
+        carregarMarcadores("ENTREGUES");
     });
 });
