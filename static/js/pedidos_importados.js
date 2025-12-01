@@ -15,7 +15,7 @@ async function abrirDetalhes(nnota) {
     let html = `
         <h5>Pedido nº ${dados.pedido.n_nota}</h5>
         <p><b>Cliente:</b> ${dados.pedido.nome_cliente}</p>
-        <p><b>Endereço:</b> ${dados.pedido.tipo_logradouro || ''} ${dados.pedido.numero || ''}, 
+        <p><b>Endereço:</b> ${dados.pedido.endereco || ''} ${dados.pedido.numero || ''}, 
                            ${dados.pedido.bairro || ''}, ${dados.pedido.cidade || ''}</p>
 
         <h6 class="mt-4">Produtos</h6>

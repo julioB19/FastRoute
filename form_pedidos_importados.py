@@ -122,7 +122,7 @@ class ServicoPedidosImportados:
             return str(v)
 
         endereco = (
-            f"{row.get('tipo_logradouro') or ''} "
+            f"{row.get('endereco') or ''} "
             f"{row.get('numero') or ''}, "
             f"{row.get('bairro') or ''}, "
             f"{row.get('cidade') or ''}"
@@ -184,7 +184,7 @@ class ServicoPedidosImportados:
                 c.nome_cliente,
                 ec.cidade,
                 ec.bairro,
-                ec.tipo_logradouro,
+                ec.endereco,
                 ec.numero,
                 ec.coordenadas,
                 EXISTS (SELECT 1 FROM ENTREGA e WHERE e.pedido_n_nota = p.n_nota) AS entregues
@@ -223,7 +223,7 @@ class ServicoPedidosImportados:
                 c.nome_cliente,
                 ec.cidade,
                 ec.bairro,
-                ec.tipo_logradouro,
+                ec.endereco,
                 ec.numero,
                 ec.coordenadas,
                 EXISTS (SELECT 1 FROM ENTREGA e WHERE e.pedido_n_nota = p.n_nota) AS entregues

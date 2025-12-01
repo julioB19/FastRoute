@@ -108,7 +108,7 @@ class ServicoImportacao:
                 "nfnumero": ["nfnumero", "nf_numero", "nfn"],
                 "nfdatemis": ["nfdatemis", "nf_dat_emis", "data_emissao", "dt_nota", "dt_nota"],
                 # endereços
-                "traend": ["traend", "logradouro", "endereco", "tra_end"],
+                "traend": ["traend", "endereco", "tra_end"],
                 "trabairro": ["trabairro", "bairro", "tra_bairro"],
                 "munnom": ["munnom", "municipio", "mun_nom"],
                 "tranumend": ["tranumend", "numero", "tra_num_end", "tra_numend"],
@@ -197,7 +197,7 @@ class ServicoImportacao:
                         # -------------------------
                         cidade = row.get(col_munnom)
                         bairro = row.get(col_trabairro)
-                        tipo_logradouro = row.get(col_traend)
+                        tipo_endereco = row.get(col_traend)
                         numero = str(row.get(col_tranumend)).strip() if col_tranumend and pd.notna(row.get(col_tranumend)) else None
                         complemento = row.get(col_tracomplemento) if col_tracomplemento and pd.notna(row.get(col_tracomplemento)) else None
                         coordenadas = row.get(col_coord) if pd.notna(row.get(col_coord)) else None
@@ -210,12 +210,12 @@ class ServicoImportacao:
                             WHERE id_cliente = %s
                               AND cidade = %s
                               AND bairro = %s
-                              AND tipo_logradouro = %s
+                              AND endereco = %s
                               AND COALESCE(numero, '') = COALESCE(%s, '')
                               AND COALESCE(complemento, '') = COALESCE(%s, '')
                             LIMIT 1;
                             """,
-                            (id_cliente, cidade, bairro, tipo_logradouro, numero, complemento),
+                            (id_cliente, cidade, bairro, endereco, numero, complemento),
                         )
                         endereco_existente = cursor.fetchone()
 
@@ -235,13 +235,13 @@ class ServicoImportacao:
                             cursor.execute(
                                 """
                                 INSERT INTO endereco_cliente (
-                                    id_cliente, cidade, bairro, tipo_logradouro,
+                                    id_cliente, cidade, bairro, endereco,
                                     numero, complemento, coordenadas
                                 )
                                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                                 RETURNING id_endereco;
                                 """,
-                                (id_cliente, cidade, bairro, tipo_logradouro, numero, complemento, coordenadas),
+                                (id_cliente, cidade, bairro, endereco, numero, complemento, coordenadas),
                             )
                             res = cursor.fetchone()
                             id_endereco = res[0] if res else None
