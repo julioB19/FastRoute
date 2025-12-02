@@ -397,10 +397,19 @@ def rotas_otimizadas():
     pedidos = dados.get("pedidos_considerados", [])
     pedidos_sem = dados.get("pedidos_sem_coordenadas", [])
     clientes_por_pedido = dados.get("clientes_por_pedido", {})
+    coordenadas = dados.get("coordenadas_usadas", []) or []
+    mapa_indices = dados.get("mapa_indices", {}) or {}
 
-    filtro_nota = (request.args.get("nota") or "").strip().lower()
-    filtro_cliente = (request.args.get("cliente") or "").strip().lower()
-    filtro_veiculo = (request.args.get("veiculo") or "").strip().lower()
+    notas_filtradas = [n.strip().lower() for n in request.args.getlist("nota") if n.strip()]
+    clientes_filtrados = [c.strip().lower() for c in request.args.getlist("cliente") if c.strip()]
+    veiculos_filtrados = [v.strip().lower() for v in request.args.getlist("veiculo") if v.strip()]
+
+    if not notas_filtradas and request.args.get("nota"):
+        notas_filtradas = [(request.args.get("nota") or "").strip().lower()]
+    if not clientes_filtrados and request.args.get("cliente"):
+        clientes_filtrados = [(request.args.get("cliente") or "").strip().lower()]
+    if not veiculos_filtrados and request.args.get("veiculo"):
+        veiculos_filtrados = [(request.args.get("veiculo") or "").strip().lower()]
 
     rotas_filtradas = {}
     for veic, seq in rotas.items():
@@ -408,20 +417,57 @@ def rotas_otimizadas():
         nota_ok = True
         cliente_ok = True
 
-        if filtro_veiculo:
-            veic_ok = filtro_veiculo in str(veic).lower()
+        if veiculos_filtrados:
+            veic_ok = any(fv in str(veic).lower() for fv in veiculos_filtrados)
 
-        if filtro_nota:
-            nota_ok = any(filtro_nota in str(n) for n in (seq or []))
+        if notas_filtradas:
+            nota_ok = any(any(f in str(n).lower() for f in notas_filtradas) for n in (seq or []))
 
-        if filtro_cliente:
+        if clientes_filtrados:
             cliente_ok = any(
-                filtro_cliente in (clientes_por_pedido.get(str(n), "") or "").lower()
+                any(fc in (clientes_por_pedido.get(str(n), "") or "").lower() for fc in clientes_filtrados)
                 for n in (seq or [])
             )
 
         if veic_ok and nota_ok and cliente_ok:
             rotas_filtradas[veic] = seq
+
+    notas_disponiveis = sorted({str(n) for seq in rotas.values() for n in (seq or [])})
+    clientes_disponiveis = sorted({v for v in clientes_por_pedido.values() if v})
+    veiculos_disponiveis = sorted(rotas.keys())
+
+    rotas_para_mapa = []
+    for idx, (veic, seq) in enumerate(rotas_filtradas.items()):
+        rota_coords = []
+        pontos = []
+        if coordenadas:
+            rota_coords.append(coordenadas[0])
+            pontos.append({"lat": coordenadas[0][0], "lng": coordenadas[0][1], "label": "0"})
+
+        for i_ent, pedido in enumerate(seq or []):
+            coord_idx = mapa_indices.get(str(pedido))
+            if coord_idx is None:
+                continue
+            try:
+                lat, lng = coordenadas[int(coord_idx)]
+            except Exception:
+                continue
+            rota_coords.append([lat, lng])
+            pontos.append({"lat": lat, "lng": lng, "label": str(i_ent + 1)})
+
+        if coordenadas:
+            rota_coords.append(coordenadas[0])
+
+        rotas_para_mapa.append(
+            {
+                "veiculo": veic,
+                "map_id": f"mapa_rota_{idx}",
+                "rota": rota_coords,
+                "pontos": pontos,
+                "notas": seq or [],
+            }
+        )
+    rotas_para_mapa_map = {r["veiculo"]: r for r in rotas_para_mapa}
 
     return render_template(
         'rotas_otimizadas.html',
@@ -431,9 +477,14 @@ def rotas_otimizadas():
         distancia=distancia,
         pedidos_considerados=pedidos,
         pedidos_sem_coordenadas=pedidos_sem,
-        filtro_nota=filtro_nota,
-        filtro_cliente=filtro_cliente,
-        filtro_veiculo=filtro_veiculo,
+        notas_filtradas=notas_filtradas,
+        clientes_filtrados=clientes_filtrados,
+        veiculos_filtrados=veiculos_filtrados,
+        notas_disponiveis=notas_disponiveis,
+        clientes_disponiveis=clientes_disponiveis,
+        veiculos_disponiveis=veiculos_disponiveis,
+        rotas_para_mapa=rotas_para_mapa,
+        rotas_para_mapa_map=rotas_para_mapa_map,
     )
 
 @app.route("/otimizar_rotas", methods=["POST"])
