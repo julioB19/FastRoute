@@ -17,24 +17,21 @@ const pinAzul = L.icon({
 });
 
 // ======================
-//  CALENDÁRIO ULTRA-COMPACTO
+//  CALENDÁRIO ULTRA-COMPACTO — CORRIGIDO
 // ======================
 
 (function () {
 
-    // 🔧 CORRIGIDO → força leitura em UTC para evitar voltar um mês
     function formatMonthName(d) {
-        return d.toLocaleString('pt-BR', { 
-            month: 'long', 
-            year: 'numeric',
-            timeZone: 'UTC'
-        });
+        return d.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
     }
 
     function sameDate(a, b) {
-        return a.getUTCFullYear() === b.getUTCFullYear() &&
-               a.getUTCMonth() === b.getUTCMonth() &&
-               a.getUTCDate() === b.getUTCDate();
+        return (
+            a.getFullYear() === b.getFullYear() &&
+            a.getMonth() === b.getMonth() &&
+            a.getDate() === b.getDate()
+        );
     }
 
     function renderMiniCompactCalendar(container, year, month, eventDates) {
@@ -55,7 +52,7 @@ const pinAzul = L.icon({
         const title = document.createElement('div');
         title.style.flex = '1';
         title.style.textAlign = 'center';
-        title.innerText = formatMonthName(new Date(Date.UTC(year, month, 1))); // CORRIGIDO
+        title.innerText = formatMonthName(new Date(year, month, 1)); // <- corrigido
 
         header.appendChild(prevBtn);
         header.appendChild(title);
@@ -73,15 +70,21 @@ const pinAzul = L.icon({
             grid.appendChild(w);
         });
 
-        const firstDay = new Date(Date.UTC(year, month, 1)).getUTCDay();
-        const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-        const today = new Date();
-        const todayUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+        const firstDay = new Date(year, month, 1).getDay(); // <- corrigido
+        const daysInMonth = new Date(year, month + 1, 0).getDate(); // <- corrigido
 
-        const eventsDatesUTC = (eventDates || []).map(ed => {
+        const today = new Date();
+        const todayLocal = new Date(
+            today.getFullYear(),
+            today.getMonth(),
+            today.getDate()
+        ); // <- corrigido
+
+        // converter datas de eventos
+        const eventsDatesLocal = (eventDates || []).map(ed => {
             try {
                 const d = new Date(ed);
-                return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+                return new Date(d.getFullYear(), d.getMonth(), d.getDate());
             } catch (e) {
                 return null;
             }
@@ -97,14 +100,16 @@ const pinAzul = L.icon({
             const cell = document.createElement('div');
             cell.className = 'mc-day';
 
-            const date = new Date(Date.UTC(year, month, d));
+            const date = new Date(year, month, d); // <- corrigido
+
             const num = document.createElement('div');
             num.className = 'mc-num';
             num.innerText = d;
 
-            if (sameDate(date, todayUTC)) cell.classList.add('today');
+            if (sameDate(date, todayLocal))
+                cell.classList.add('today');
 
-            const hasEvent = eventsDatesUTC.some(ed => sameDate(ed, date));
+            const hasEvent = eventsDatesLocal.some(ed => sameDate(ed, date));
             if (hasEvent) {
                 cell.classList.add("entrega");
 
@@ -121,12 +126,12 @@ const pinAzul = L.icon({
 
         prevBtn.addEventListener('click', () => {
             const newDate = new Date(year, month - 1, 1);
-            fetchEventsAndRender(container, newDate.getUTCFullYear(), newDate.getUTCMonth());
+            fetchEventsAndRender(container, newDate.getFullYear(), newDate.getMonth());
         });
 
         nextBtn.addEventListener('click', () => {
             const newDate = new Date(year, month + 1, 1);
-            fetchEventsAndRender(container, newDate.getUTCFullYear(), newDate.getUTCMonth());
+            fetchEventsAndRender(container, newDate.getFullYear(), newDate.getMonth());
         });
     }
 
@@ -159,7 +164,7 @@ const pinAzul = L.icon({
         const el = document.getElementById('miniCompactCalendario');
         if (el) {
             const now = new Date();
-            fetchEventsAndRender(el, now.getUTCFullYear(), now.getUTCMonth());
+            fetchEventsAndRender(el, now.getFullYear(), now.getMonth());
         }
     });
 
