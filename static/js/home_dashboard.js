@@ -22,12 +22,16 @@ const pinAzul = L.icon({
 
 (function () {
 
+    // 🔧 CORRIGIDO → força leitura em UTC para evitar voltar um mês
     function formatMonthName(d) {
-        return d.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+        return d.toLocaleString('pt-BR', { 
+            month: 'long', 
+            year: 'numeric',
+            timeZone: 'UTC'
+        });
     }
 
     function sameDate(a, b) {
-        // compara pelas partes UTC para evitar problemas com timezones
         return a.getUTCFullYear() === b.getUTCFullYear() &&
                a.getUTCMonth() === b.getUTCMonth() &&
                a.getUTCDate() === b.getUTCDate();
@@ -51,7 +55,7 @@ const pinAzul = L.icon({
         const title = document.createElement('div');
         title.style.flex = '1';
         title.style.textAlign = 'center';
-        title.innerText = formatMonthName(new Date(Date.UTC(year, month, 1)));
+        title.innerText = formatMonthName(new Date(Date.UTC(year, month, 1))); // CORRIGIDO
 
         header.appendChild(prevBtn);
         header.appendChild(title);
@@ -74,10 +78,8 @@ const pinAzul = L.icon({
         const today = new Date();
         const todayUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
 
-        // Preprocess eventDates -> array of Date objects (UTC midnight)
         const eventsDatesUTC = (eventDates || []).map(ed => {
             try {
-                // ed may be string "YYYY-MM-DD" or ISO
                 const d = new Date(ed);
                 return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
             } catch (e) {
@@ -104,7 +106,7 @@ const pinAzul = L.icon({
 
             const hasEvent = eventsDatesUTC.some(ed => sameDate(ed, date));
             if (hasEvent) {
-                cell.classList.add("entrega"); // aplica estilo azul
+                cell.classList.add("entrega");
 
                 const dot = document.createElement('div');
                 dot.className = 'mc-dot';
@@ -119,12 +121,12 @@ const pinAzul = L.icon({
 
         prevBtn.addEventListener('click', () => {
             const newDate = new Date(year, month - 1, 1);
-            fetchEventsAndRender(container, newDate.getFullYear(), newDate.getMonth());
+            fetchEventsAndRender(container, newDate.getUTCFullYear(), newDate.getUTCMonth());
         });
 
         nextBtn.addEventListener('click', () => {
             const newDate = new Date(year, month + 1, 1);
-            fetchEventsAndRender(container, newDate.getFullYear(), newDate.getMonth());
+            fetchEventsAndRender(container, newDate.getUTCFullYear(), newDate.getUTCMonth());
         });
     }
 
@@ -135,7 +137,6 @@ const pinAzul = L.icon({
                 return res.json();
             })
             .then(events => {
-                // events expected like [{start: "YYYY-MM-DD"}, ...] or array of strings
                 const eventDates = (events || []).map(e => {
                     if (typeof e === "string") return e;
                     if (e && e.start) return e.start;
@@ -151,7 +152,6 @@ const pinAzul = L.icon({
             });
     }
 
-    // expose a render function in case other scripts want to re-render
     window.renderMiniCompactCalendar = renderMiniCompactCalendar;
     window.fetchEventsAndRender = fetchEventsAndRender;
 
@@ -159,7 +159,7 @@ const pinAzul = L.icon({
         const el = document.getElementById('miniCompactCalendario');
         if (el) {
             const now = new Date();
-            fetchEventsAndRender(el, now.getFullYear(), now.getMonth());
+            fetchEventsAndRender(el, now.getUTCFullYear(), now.getUTCMonth());
         }
     });
 
@@ -194,14 +194,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
                     const marker = L.marker([m.lat, m.lng], { icon: icone }).addTo(map);
 
-                    // se entregue, traz marcador para frente (visível sobrepostos)
                     if (status === "ENTREGUE" && typeof marker.bringToFront === "function") {
                         marker.bringToFront();
                     } else if (status === "ENTREGUE" && marker.setZIndexOffset) {
                         marker.setZIndexOffset(1000);
                     }
 
-                    // bind popup com possíveis múltiplas notas
                     let notas = Array.isArray(m.n_notas) ? m.n_notas.join(", ") : (m.n_notas || m.n_nota || "");
                     marker.bindPopup(`Pedidos: ${notas}<br>Status: ${status}`);
 
@@ -232,7 +230,6 @@ document.addEventListener("DOMContentLoaded", function () {
     let mapaExpandido = null;
     let marcadoresLayer = null;
 
-    // Marca botão ativo
     function ativarBotao(btn) {
         document.querySelectorAll(".filtro-btn").forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
@@ -258,16 +255,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
                     const status = (m.status || "").toUpperCase();
 
-                    // FILTRAGEM CORRETA
                     if (filtro === "COMPLETOS" && status !== "COMPLETO") return;
                     if (filtro === "ENTREGUES" && status !== "ENTREGUE") return;
-                    // filtro "TODOS" -> não filtra nada (passa tudo)
 
                     const icone = status === "ENTREGUE" ? pinAzul : pinVerde;
 
                     const marker = L.marker([m.lat, m.lng], { icon: icone }).addTo(marcadoresLayer);
 
-                    // traz entregues para frente para evitar que apareça verde por cima do azul
                     if (status === "ENTREGUE" && typeof marker.bringToFront === "function") {
                         marker.bringToFront();
                     } else if (status === "ENTREGUE" && marker.setZIndexOffset) {
@@ -286,7 +280,6 @@ document.addEventListener("DOMContentLoaded", function () {
             });
     }
 
-    // Abrir overlay
     btnAbrir.addEventListener("click", () => {
         overlay.style.display = "flex";
 
@@ -306,12 +299,10 @@ document.addEventListener("DOMContentLoaded", function () {
         }, 200);
     });
 
-    // Fechar overlay
     fechar.addEventListener("click", () => {
         overlay.style.display = "none";
     });
 
-    // Filtros
     filtroTodos.addEventListener("click", () => {
         ativarBotao(filtroTodos);
         carregarMarcadores("TODOS");

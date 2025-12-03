@@ -13,10 +13,8 @@ app.secret_key = 'fastrout'  # Troque para uma chave mais segura em producao
 
 # Config BG
 DB_USER = "postgres"
-#DB_PASSWORD = "fastrout"
 DB_PASSWORD = "1234"
 DB_HOST = "localhost"
-#DB_PORT = "3380"
 DB_PORT = "5433"
 DB_NAME = "FastRoute"
 
@@ -90,17 +88,14 @@ def realizar_logout():
 @app.route('/home')
 @login_obrigatorio
 def home():
-    # Totais para o dashboard
     total_completos = servico_pedidos.contar_com_filtros({
         "coords_not_null": True,
         "excluir_entregues": True
     })
     total_incompletos = servico_pedidos.contar_incompletos()
 
-    # contar entregas no último mês - exemplo simples (você pode ajustar)
     entregas_ultimo_mes = 0
     try:
-        # consulta simples — pode ser trocada por método do serviço
         q = """
             SELECT COUNT(DISTINCT DATE(e.data_entrega)) AS total
             FROM ENTREGA e
@@ -115,8 +110,8 @@ def home():
         'home.html',
         usuario=session.get('usuario_nome'),
         cargo=session.get('usuario_cargo'),
-        total_pedidos=total_completos,         # BLOCO 1
-        pedidos_incompletos=total_incompletos, # BLOCO 2
+        total_pedidos=total_completos,
+        pedidos_incompletos=total_incompletos,
         entregas_ultimo_mes=entregas_ultimo_mes
     )
 
@@ -298,19 +293,33 @@ def excluir_usuario(usuario_id):
 @app.route('/pedidos_importados')
 @login_obrigatorio
 def pedidos_importados():
+
+    # ------------------------------------------------
+    # LENDO ARGUMENTOS DA URL
+    # ------------------------------------------------
     pagina = request.args.get('pagina', default=1, type=int)
     filtro = request.args.get('filtro', default='todos')
     data_nota = request.args.get('data_nota', default='').strip()
+    data_entrega = request.args.get('data_entrega', default='').strip()
 
     itens_por_pagina = request.args.get('itens', default=20, type=int)
     if itens_por_pagina not in (20, 50, 100):
         itens_por_pagina = 20
 
-    filtros = {}
-    cliente_id = request.args.get('cliente_id')
-    if cliente_id:
-        filtros["cliente_id"] = cliente_id
+    # CAMPOS NOVOS
+    cliente_nome = request.args.get('cliente_nome', default='').strip()
+    clientes_multi = request.args.getlist('clientes_multi[]')  # MULTI
+    endereco = request.args.get('endereco', default='').strip()
+    cidade = request.args.get('cidade', default='').strip()
 
+    numero_nota = request.args.get('numero_nota', default='').strip()
+    notas_multi = request.args.getlist('notas_multi[]')  # MULTI
+
+    filtros = {}
+
+    # ------------------------------------------------
+    # FILTRO PRINCIPAL
+    # ------------------------------------------------
     if filtro == "completos":
         filtros["coords_not_null"] = True
         filtros["excluir_entregues"] = True
@@ -319,12 +328,67 @@ def pedidos_importados():
     elif filtro == "entregues":
         filtros["entregues"] = True
 
+    # ------------------------------------------------
+    # DATA ÚNICA → PERÍODO
+    # ------------------------------------------------
     if data_nota:
         filtros["data_inicio"] = data_nota
         filtros["data_fim"] = data_nota
 
+    if data_entrega:
+        filtros["entrega_inicio"] = data_entrega
+        filtros["entrega_fim"] = data_entrega
+
+    # ------------------------------------------------
+    # MULTI-SELEÇÃO DE CLIENTES (OR)
+    # ------------------------------------------------
+    clientes_lista = []
+
+    # cliente_nome separado por vírgula
+    if cliente_nome:
+        partes = [x.strip() for x in cliente_nome.split(",") if x.strip()]
+        clientes_lista.extend(partes)
+
+    # cliente_multi[] do HTML
+    if clientes_multi:
+        clientes_lista.extend([x.strip() for x in clientes_multi if x.strip()])
+
+    # remove duplicados
+    clientes_lista = list(set(clientes_lista))
+
+    if clientes_lista:
+        filtros["cliente_nome_lista"] = clientes_lista
+
+    # ------------------------------------------------
+    # MULTI-SELEÇÃO DE NOTAS (OR)
+    # ------------------------------------------------
+    notas_lista = []
+
+    if numero_nota:
+        partes = [x.strip() for x in numero_nota.split(",") if x.strip()]
+        notas_lista.extend(partes)
+
+    if notas_multi:
+        notas_lista.extend([x.strip() for x in notas_multi if x.strip()])
+
+    notas_lista = list(set(notas_lista))
+
+    if notas_lista:
+        filtros["notas_lista"] = notas_lista
+
+    # ------------------------------------------------
+    # CAMPOS SIMPLES
+    # ------------------------------------------------
+    if endereco:
+        filtros["endereco"] = endereco
+    if cidade:
+        filtros["cidade"] = cidade
+
     filtros["itens_por_pagina"] = itens_por_pagina
 
+    # ------------------------------------------------
+    # EXECUTAR LISTAGEM
+    # ------------------------------------------------
     pag = servico_pedidos.listar_pedidos(pagina, filtros)
     clientes = servico_pedidos.buscar_clientes()
 
@@ -340,7 +404,12 @@ def pedidos_importados():
             clientes=clientes,
             filtro=filtro,
             data_nota=data_nota,
+            data_entrega=data_entrega,
             itens_por_pagina=itens_por_pagina,
+            cliente_nome=cliente_nome,
+            endereco=endereco,
+            cidade=cidade,
+            numero_nota=numero_nota
         )
     except TemplateNotFound:
         return render_template(
@@ -349,7 +418,6 @@ def pedidos_importados():
             pedidos=pag["pedidos"],
             clientes=clientes,
         )
-
 
 @app.route("/detalhar_pedido/<int:n_nota>")
 @login_obrigatorio
@@ -415,17 +483,12 @@ def data_br(value):
     try:
         return value.strftime("%d/%m/%Y")
     except:
-        return value  # caso já venha formatada
+        return value
 
 
 @app.route("/entregas-mapa")
 @login_obrigatorio
 def entregas_mapa():
-    """
-    Retorna marcadores agregados por coordenadas.
-    Se existir pelo menos uma entrega (entregue=True) para uma coordenada,
-    o status daquela coordenada será 'ENTREGUE'. Caso contrário 'COMPLETO'.
-    """
     query = """
         SELECT
             p.n_nota,
@@ -439,8 +502,7 @@ def entregas_mapa():
 
     rows = servico_pedidos._execute_select(query)
 
-    # Agregamos por coordenadas para evitar múltiplos marcadores sobrepostos
-    agregados = {}  # chave = coords, valor = dict { lat, lng, n_notas: [..], status }
+    agregados = {}
     for r in rows:
         coords = r.get("coordenadas")
         if not coords:
@@ -459,20 +521,17 @@ def entregas_mapa():
                 "lat": lat,
                 "lng": lng,
                 "n_notas": [r.get("n_nota")],
-                # se qualquer um for entregue, marca ENTREGUE
                 "status": "ENTREGUE" if entregado else "COMPLETO"
             }
         else:
-            # append nota
             current["n_notas"].append(r.get("n_nota"))
-            # se algum for entregue, força ENTREGUE
             if entregado:
                 current["status"] = "ENTREGUE"
 
     marcadores = []
     for v in agregados.values():
         marcadores.append({
-            "n_notas": v["n_notas"],            # agora pode ser lista
+            "n_notas": v["n_notas"],
             "lat": v["lat"],
             "lng": v["lng"],
             "status": v["status"]
@@ -484,10 +543,6 @@ def entregas_mapa():
 @app.route("/entregas-datas")
 @login_obrigatorio
 def entregas_datas():
-    """
-    Retorna lista distinta de datas em que ocorreram entregas
-    no formato YYYY-MM-DD, para o calendário marcar.
-    """
     query = """
         SELECT DISTINCT DATE(e.data_entrega) AS data_entrega
         FROM ENTREGA e
@@ -499,12 +554,10 @@ def entregas_datas():
 
     datas = []
     for r in rows:
-        # r["data_entrega"] pode ser datetime.date/datetime
         dt = r.get("data_entrega")
         try:
             datas.append({"start": dt.strftime("%Y-%m-%d")})
         except Exception:
-            # se já for string
             datas.append({"start": str(dt)})
 
     return jsonify(datas)

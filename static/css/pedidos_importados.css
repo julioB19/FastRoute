@@ -1,3 +1,7 @@
+/* =======================================
+   ESTILOS ORIGINAIS
+======================================= */
+
 .table thead th {
     border-bottom: 1px solid var(--cinza-borda);
 }
@@ -50,5 +54,115 @@
 @media (max-width: 767px) {
     .card .table-responsive {
         padding: 6px;
+    }
+}
+
+/* =======================================
+   NOVOS ESTILOS PARA OS FILTROS
+======================================= */
+
+/* Linha dos filtros absolutamente alinhada */
+.filtros-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+}
+
+/* Inputs mais alinhados e padronizados */
+.filtros-row .form-control,
+.filtros-row .form-select {
+    min-width: 180px;
+}
+
+/* Botões de aplicar e limpar */
+.btn-aplicar {
+    white-space: nowrap;
+    height: 38px;
+}
+
+.btn-limpar {
+    white-space: nowrap;
+    height: 38px;
+}
+
+/* Botão "+ Filtros" */
+.btn-mais-filtros {
+    white-space: nowrap;
+    height: 38px;
+}
+
+/* Container dos filtros extras */
+#filtros-extras {
+    background: #f8f9fa;
+    border: 1px solid var(--cinza-borda);
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 12px;
+}
+
+/* Campos dentro do bloco extra */
+#filtros-extras .form-control,
+#filtros-extras .form-select {
+    margin-bottom: 12px;
+}
+
+/* Multi-select bonito e responsivo */
+.multi-select {
+    height: 90px !important;
+    padding: 8px;
+}
+
+.multi-select option {
+    padding: 6px;
+}
+
+/* Sempre mostrar barra de rolagem interna */
+.multi-select::-webkit-scrollbar {
+    width: 8px;
+}
+
+.multi-select::-webkit-scrollbar-thumb {
+    background: var(--verde-medio);
+    border-radius: 4px;
+}
+
+/* Hover de opções */
+.multi-select option:hover {
+    background-color: var(--verde-claro);
+    color: white;
+    cursor: pointer;
+}
+
+/* Títulos dos filtros extras */
+.extra-label {
+    font-weight: 600;
+    margin-top: 4px;
+}
+
+/* Alinhar corretamente o bloco dos botões */
+.filtros-acoes {
+    margin-left: auto;
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+/* Ajuste fino em telas menores */
+@media (max-width: 992px) {
+    .filtros-acoes {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
+
+@media (max-width: 576px) {
+    .filtros-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filtros-acoes {
+        justify-content: center;
     }
 }
