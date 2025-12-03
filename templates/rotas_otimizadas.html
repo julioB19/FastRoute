@@ -1,0 +1,308 @@
+{% extends "htmlBase.html" %}
+{% block titulo %}FastRoute - Rotas Otimizadas{% endblock %}
+
+{% block conteudo %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<div class="container-fluid mt-3 px-3 px-md-4">
+    <div class="row mb-3 no-print">
+        <div class="col-12 d-flex justify-content-between align-items-center">
+            <div>
+                <h4 class="mb-1" style="color: rgb(237, 194, 0);">Rotas Otimizadas</h4>
+                <small class="text-light">Último resultado armazenado na sessão</small>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('pagina_otimizacao_rotas') }}" class="btn btn-cotri">
+                    <i class="bi bi-lightning-charge"></i> Nova otimização
+                </a>
+                <button class="btn btn-outline-light" onclick="window.print()">
+                    <i class="bi bi-printer"></i> Imprimir
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-body">
+            <form id="filtrosRotas" method="get" class="row g-3 align-items-end no-print">
+                <div class="col-md-3">
+                    <label class="form-label text-dark">Filtrar por nota</label>
+                    <div class="input-group">
+                        <input id="filtroNota" type="text" class="form-control" name="nota" value="{{ notas_filtradas[0] if notas_filtradas else '' }}" placeholder="Ex: 123">
+                        <button class="btn btn-cotri btn-lookup" type="button" data-tipo="nota" title="Pesquisar nota">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-dark">Filtrar por cliente</label>
+                    <div class="input-group">
+                        <input id="filtroCliente" type="text" class="form-control" name="cliente" value="{{ clientes_filtrados[0] if clientes_filtrados else '' }}" placeholder="Nome do cliente">
+                        <button class="btn btn-cotri btn-lookup" type="button" data-tipo="cliente" title="Pesquisar cliente">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-dark">Filtrar por veículo</label>
+                    <div class="input-group">
+                        <input id="filtroVeiculo" type="text" class="form-control" name="veiculo" value="{{ veiculos_filtrados[0] if veiculos_filtrados else '' }}" placeholder="Placa/veículo">
+                        <button class="btn btn-cotri btn-lookup" type="button" data-tipo="veiculo" title="Pesquisar veículo">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-3 d-flex gap-2">
+                    <button class="btn btn-cotri flex-fill" type="submit">Aplicar</button>
+                    <a class="btn btn-outline-secondary flex-fill" href="{{ url_for('rotas_otimizadas') }}">Limpar</a>
+                </div>
+            </form>
+
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Veículo</th>
+                            <th>Sequência (Notas)</th>
+                            <th class="text-end">Resumo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if rotas %}
+                            {% for veic, seq in rotas.items() %}
+                            <tr>
+                                <td>{{ veic }}</td>
+                                <td>
+                                    {% if seq %}
+                                        {{ seq|join(" -> ") }}
+                                    {% else %}
+                                        Sem entregas
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ loop.index }}" aria-expanded="false">
+                                        Detalhes
+                                    </button>
+                                </td>
+                            </tr>
+                            {% set rota_info = rotas_para_mapa_map.get(veic) %}
+                            <tr class="collapse" id="collapse-{{ loop.index }}" data-veiculo="{{ veic }}" data-map-id="{{ rota_info.map_id if rota_info else '' }}">
+                                <td colspan="3">
+                                    <div class="p-3 bg-light rounded">
+                                        <p class="mb-1 text-dark"><strong>Veículo:</strong> {{ veic }}</p>
+                                        {% if rota_info %}
+                                            <p class="mb-2 text-dark"><strong>Sequência:</strong> {{ rota_info.notas|join(" -> ") }}</p>
+                                            <div id="map-container-{{ loop.index }}" class="map-container">
+                                                <div id="{{ rota_info.map_id }}" class="mapa-rota"></div>
+                                            </div>
+                                        {% else %}
+                                            <p class="text-muted mb-0">Sem coordenadas para exibir o mapa.</p>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="2" class="text-center py-4">Nenhum resultado encontrado. Execute uma otimização.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de lookup -->
+<div class="modal fade" id="modalLookup" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered lookup-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="lookupTitulo">Pesquisar</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="text" class="form-control mb-2" id="lookupInput" placeholder="Digite para filtrar">
+                <div id="lookupResultados" class="list-group" style="overflow-y: auto;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    body {
+        background: #fff;
+    }
+    .card {
+        box-shadow: none !important;
+    }
+}
+
+.lookup-modal {
+    max-width: 520px;
+    width: 520px;
+}
+
+#lookupResultados {
+    max-height: 260px;
+    min-height: 220px;
+}
+
+.map-container {
+    width: 100%;
+    height: 320px;
+}
+
+.mapa-rota {
+    width: 100%;
+    height: 100%;
+    border-radius: 8px;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const dadosLookup = {
+        nota: {{ notas_disponiveis|tojson }},
+        cliente: {{ clientes_disponiveis|tojson }},
+        veiculo: {{ veiculos_disponiveis|tojson }},
+    };
+
+    const campos = {
+        nota: document.getElementById("filtroNota"),
+        cliente: document.getElementById("filtroCliente"),
+        veiculo: document.getElementById("filtroVeiculo"),
+    };
+
+    const modalEl = document.getElementById("modalLookup");
+    const modal = new bootstrap.Modal(modalEl);
+    const lookupInput = document.getElementById("lookupInput");
+    const lookupResultados = document.getElementById("lookupResultados");
+    const lookupTitulo = document.getElementById("lookupTitulo");
+    let tipoAtual = null;
+    let valoresAtuais = [];
+
+    const renderResultados = (termo = "") => {
+        lookupResultados.innerHTML = "";
+        const filtro = (termo || "").toLowerCase();
+        valoresAtuais
+            .filter((v) => v.toLowerCase().includes(filtro))
+            .slice(0, 100)
+            .forEach((v) => {
+                const item = document.createElement("button");
+                item.type = "button";
+                item.className = "list-group-item list-group-item-action";
+                item.textContent = v;
+                item.onclick = () => {
+                    if (tipoAtual && campos[tipoAtual]) {
+                        campos[tipoAtual].value = v;
+                    }
+                    modal.hide();
+                };
+                lookupResultados.appendChild(item);
+            });
+        if (!lookupResultados.children.length) {
+            const vazio = document.createElement("div");
+            vazio.className = "list-group-item text-muted";
+            vazio.textContent = "Nenhum resultado";
+            lookupResultados.appendChild(vazio);
+        }
+    };
+
+    document.querySelectorAll(".btn-lookup").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            tipoAtual = btn.dataset.tipo;
+            valoresAtuais = dadosLookup[tipoAtual] || [];
+            lookupTitulo.textContent = `Pesquisar ${tipoAtual}`;
+            lookupInput.value = campos[tipoAtual]?.value || "";
+            renderResultados(lookupInput.value);
+            modal.show();
+            setTimeout(() => lookupInput.focus(), 150);
+        });
+    });
+
+    lookupInput.addEventListener("input", (e) => {
+        renderResultados(e.target.value);
+    });
+
+    // Leaflet maps para rotas
+    const rotasMapa = {{ rotas_para_mapa_map|tojson }};
+    const mapas = {};
+    const initMap = (rota) => {
+        if (!rota || !rota.map_id) {
+            return;
+        }
+        const container = document.getElementById(rota.map_id);
+        if (!container || mapas[rota.map_id]) {
+            return;
+        }
+        const map = L.map(rota.map_id, { zoomControl: true });
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap'
+        }).addTo(map);
+
+        if (rota.rota && rota.rota.length) {
+            const poly = L.polyline(rota.rota, { color: "#1b6a3f", weight: 4, opacity: 0.85 }).addTo(map);
+            map.fitBounds(poly.getBounds(), { padding: [20, 20] });
+        }
+
+        (rota.pontos || []).forEach((p) => {
+            const icon = L.divIcon({
+                html: `<div class="marker-num">${p.label}</div>`,
+                className: "marker-num-wrapper"
+            });
+            L.marker([p.lat, p.lng], { icon }).addTo(map);
+        });
+
+        mapas[rota.map_id] = map;
+    };
+
+    const markerStyle = document.createElement("style");
+    markerStyle.textContent = `
+        .marker-num-wrapper {
+            background: transparent;
+            border: none;
+        }
+        .marker-num {
+            background: #1b6a3f;
+            color: #fff;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            font-size: 14px;
+            font-weight: 700;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+        }
+    `;
+    document.head.appendChild(markerStyle);
+
+    document.querySelectorAll('[id^="collapse-"]').forEach((elem) => {
+        elem.addEventListener('shown.bs.collapse', () => {
+            const veic = elem.getAttribute("data-veiculo");
+            const rota = veic ? rotasMapa[veic] : null;
+            initMap(rota);
+            if (rota?.map_id && mapas[rota.map_id]) {
+                setTimeout(() => mapas[rota.map_id].invalidateSize(), 150);
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
