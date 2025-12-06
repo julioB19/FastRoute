@@ -18,12 +18,16 @@ class ServicoUsuario:
                     conn.rollback()
                     return False, f"Ja existe um usuario cadastrado com o nome {nome}."
 
+                # busca o ultimo ID e incrementa manualmente
+                cursor.execute("SELECT COALESCE(MAX(ID_USUARIO), 0) + 1 FROM USUARIO;")
+                prox_id = cursor.fetchone()[0]
+
                 cursor.execute(
                     """
-                    INSERT INTO USUARIO (NOME, SENHA, CARGO)
-                    VALUES (%s, %s, %s)
+                    INSERT INTO USUARIO (ID_USUARIO, NOME, SENHA, CARGO)
+                    VALUES (%s, %s, %s, %s)
                     """,
-                    (nome, senha, cargo),
+                    (prox_id, nome, senha, cargo),
                 )
                 conn.commit()
                 return True, f"Usuario {nome} cadastrado com sucesso!"

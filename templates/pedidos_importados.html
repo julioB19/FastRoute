@@ -19,11 +19,6 @@
             <span class="text-white" style="font-weight: 600; font-size: 16px;">
                 Total: {{ total_registros }}
             </span>
-
-            <!-- Botão + Filtros -->
-            <button type="button" class="btn btn-outline-light btn-sm" onclick="toggleFiltros()">
-                + Filtros
-            </button>
         </div>
 
         <!-- Filtro padrão -->
@@ -58,11 +53,6 @@
             <a href="{{ url_for('pedidos_importados') }}" class="btn btn-outline-light ms-2">
                 Limpar
             </a>
-
-            <!-- BOTÃO NOVO – GERAR ROTA -->
-            <button type="button" class="btn btn-warning text-dark ms-2">
-                Gerar Rota
-            </button>
         </div>
 
         <!-- ========================= -->
@@ -143,8 +133,9 @@
                                     </td>
 
                                     <td>
-                                        <button onclick="abrirDetalhes({{ p.id }})"
-                                                class="btn btn-sm btn-warning text-dark">
+                                        <button type="button"
+                                            onclick="abrirDetalhes('{{ p.id }}')"
+                                            class="btn btn-sm btn-warning text-dark">
                                             Detalhes
                                         </button>
                                     </td>

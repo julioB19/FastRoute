@@ -516,6 +516,17 @@ def otimizar_rotas():
         resultado = servico_pedidos.otimizar_rotas(
             pedido_ids, deposito_tuple, parametros_algoritmo
         )
+        # registra entregas/rotas como concluidas
+        try:
+            ok_reg, erro_reg = servico_pedidos.registrar_entregas_otimizadas(
+                resultado.get("rotas_por_veiculo", {}),
+                session.get("usuario_id"),
+            )
+            if not ok_reg:
+                print("Falha ao registrar entregas otimizadas:", erro_reg)
+        except Exception as e:
+            print("Erro inesperado ao registrar entregas otimizadas:", e)
+
         # guarda resultado na sessao para consulta posterior
         try:
             clientes_por_pedido = {}
@@ -536,6 +547,7 @@ def otimizar_rotas():
                 ],
                 "pedidos_considerados": resultado.get("pedidos_considerados", []),
                 "pedidos_sem_coordenadas": resultado.get("pedidos_sem_coordenadas", []),
+                "pedidos_sem_compativeis": resultado.get("pedidos_sem_compativeis", []),
                 "mapa_indices": resultado.get("mapa_indices", {}),
                 "clientes_por_pedido": clientes_por_pedido,
             }

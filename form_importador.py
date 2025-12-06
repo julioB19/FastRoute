@@ -197,7 +197,7 @@ class ServicoImportacao:
                         # -------------------------
                         cidade = row.get(col_munnom)
                         bairro = row.get(col_trabairro)
-                        tipo_endereco = row.get(col_traend)
+                        endereco = row.get(col_traend)
                         numero = str(row.get(col_tranumend)).strip() if col_tranumend and pd.notna(row.get(col_tranumend)) else None
                         complemento = row.get(col_tracomplemento) if col_tracomplemento and pd.notna(row.get(col_tracomplemento)) else None
                         coordenadas = row.get(col_coord) if pd.notna(row.get(col_coord)) else None

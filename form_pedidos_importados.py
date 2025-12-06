@@ -305,7 +305,6 @@ class ServicoPedidosImportados:
                 c.nome_cliente,
                 ec.cidade,
                 ec.bairro,
-                ec.tipo_logradouro,
                 ec.numero,
                 ec.coordenadas
             FROM PEDIDO p
@@ -374,6 +373,100 @@ class ServicoPedidosImportados:
                 continue
         return veiculos
 
+    def registrar_entregas_otimizadas(
+        self,
+        rotas_por_veiculo: Dict[str, List[str]],
+        usuario_id: Optional[int] = None,
+    ):
+        """
+        Marca pedidos das rotas como ENTREGUE e registra rota/usuario.
+        """
+        if not rotas_por_veiculo:
+            return False, "Nenhuma rota calculada."
+
+        try:
+            with self.banco.obter_cursor() as (conn, cursor):
+                cursor.execute("SELECT COALESCE(MAX(id_entrega), 0) FROM entrega;")
+                next_id = (cursor.fetchone() or [0])[0] + 1
+
+                for veic, pedidos in (rotas_por_veiculo or {}).items():
+                    if not pedidos:
+                        continue
+                    seq_descarga = ",".join(str(p) for p in pedidos)
+
+                    for nota in pedidos:
+                        nota_str = str(nota)
+                        base_nota = nota_str.split("#")[0]
+                        # ENTREGAS: upsert por pedido
+                        if "#" not in nota_str:
+                            cursor.execute(
+                                "SELECT id_entrega FROM entrega WHERE pedido_n_nota = %s LIMIT 1;",
+                                (base_nota,),
+                            )
+                            row = cursor.fetchone()
+                        else:
+                            row = None
+
+                        if row:
+                            id_entrega = row[0]
+                            cursor.execute(
+                                """
+                                UPDATE entrega
+                                SET status = %s,
+                                    veiculo_placa = %s,
+                                    data_entrega = CURRENT_DATE
+                                WHERE id_entrega = %s;
+                                """,
+                                ("ENTREGUE", veic, id_entrega),
+                            )
+                        else:
+                            id_entrega = next_id
+                            next_id += 1
+                            cursor.execute(
+                                """
+                                INSERT INTO entrega (id_entrega, status, pedido_n_nota, veiculo_placa, data_entrega)
+                                VALUES (%s, %s, %s, %s, CURRENT_DATE);
+                                """,
+                                (id_entrega, "ENTREGUE", int(base_nota), veic),
+                            )
+
+                        # ROTA: uma rota por entrega, com a sequencia daquela rota do veiculo
+                        cursor.execute(
+                            "SELECT id_rota FROM rota WHERE entrega_id_entrega = %s LIMIT 1;",
+                            (id_entrega,),
+                        )
+                        rota_row = cursor.fetchone()
+                        if rota_row:
+                            cursor.execute(
+                                "UPDATE rota SET sequencia_descarga = %s WHERE id_rota = %s;",
+                                (seq_descarga, rota_row[0]),
+                            )
+                        else:
+                            cursor.execute(
+                                """
+                                INSERT INTO rota (sequencia_descarga, entrega_id_entrega)
+                                VALUES (%s, %s);
+                                """,
+                                (seq_descarga, id_entrega),
+                            )
+
+                        # USUARIO_ENTREGA: vincula o usuario logado se informado
+                        if usuario_id:
+                            cursor.execute(
+                                """
+                                INSERT INTO usuario_entrega (entrega_id_entrega, usuario_id_usuario)
+                                VALUES (%s, %s)
+                                ON CONFLICT (entrega_id_entrega, usuario_id_usuario) DO NOTHING;
+                                """,
+                                (id_entrega, int(usuario_id)),
+                            )
+
+                conn.commit()
+            return True, None
+        except Exception as e:
+            print("Erro ao registrar entregas otimizadas:", e)
+            return False, str(e)
+
     def otimizar_rotas(
         self,
         pedido_ids: List[int],
@@ -404,25 +497,60 @@ class ServicoPedidosImportados:
         coordenadas: List[Tuple[float, float]] = [(deposito_lat, deposito_lng)]
         entregas: List[Entrega] = []
         pedidos_sem_coord = []
+        pedidos_sem_compat = []
 
-        for idx, pedido in enumerate(pedidos_resumo, start=1):
+        idx_matriz = 1
+        for pedido in pedidos_resumo:
             coords = self._parse_coordenadas(pedido.get("coordenadas"))
             if not coords:
                 pedidos_sem_coord.append(pedido.get("n_nota"))
                 continue
 
-            coordenadas.append(coords)
-            entregas.append(
-                Entrega(
-                    id=str(pedido.get("n_nota")),
-                    peso=float(pedido.get("peso_total") or 0.0),
-                    tipo_carga=int(pedido.get("tipo_carga") or 1),
-                    indice_matriz=idx,
+            peso = float(pedido.get("peso_total") or 0.0)
+            tipo_carga = int(pedido.get("tipo_carga") or 1)
+            def veiculo_compativel(v):
+                if tipo_carga == 2 and int(v.tipo_carga) != 2:
+                    return False
+                if int(v.tipo_carga) == 2 and tipo_carga != 2:
+                    return False
+                return int(v.tipo_carga) == tipo_carga
+
+            # capacidade maxima entre veiculos compativeis
+            caps_compativeis = [v.limite_peso for v in veiculos if veiculo_compativel(v)]
+            if not caps_compativeis:
+                pedidos_sem_compat.append(pedido.get("n_nota"))
+                continue
+            cap_max = max(caps_compativeis)
+            if cap_max <= 0:
+                raise ValueError("Limite de peso dos veiculos inválido.")
+
+            partes = 1
+            if peso > cap_max:
+                partes = math.ceil(peso / cap_max)
+
+            peso_parte = peso / partes if partes > 0 else peso
+
+            for parte in range(partes):
+                entrega_id = str(pedido.get("n_nota")) if partes == 1 else f"{pedido.get('n_nota')}#{parte+1}"
+                coordenadas.append(coords)
+                entregas.append(
+                    Entrega(
+                        id=entrega_id,
+                        peso=float(peso_parte),
+                        tipo_carga=tipo_carga,
+                        indice_matriz=idx_matriz,
+                    )
                 )
-            )
+                idx_matriz += 1
 
         if not entregas:
-            raise ValueError("Nenhum pedido com coordenadas validas para otimizar.")
+            msg_partes = []
+            if pedidos_sem_coord:
+                msg_partes.append(f"sem coordenadas: {pedidos_sem_coord}")
+            if pedidos_sem_compat:
+                msg_partes.append(f"sem veiculo compativel: {pedidos_sem_compat}")
+            detalhe = " | ".join(msg_partes) if msg_partes else "Nenhum pedido elegivel."
+            raise ValueError(f"Nenhum pedido otimizavel. {detalhe}")
 
         matriz = gerar_matriz_distancias(coordenadas)
         params = parametros_algoritmo or {}
@@ -440,11 +568,18 @@ class ServicoPedidosImportados:
 
         mapa_indices = {e.id: e.indice_matriz for e in entregas}
 
+        # remove veiculos sem entregas (uma rota vazia nÆo representa entrega)
+        rotas_filtradas = {
+            vid: seq for vid, seq in (resultado.get("rotas_por_veiculo") or {}).items() if seq
+        }
+        resultado["rotas_por_veiculo"] = rotas_filtradas
+
         resultado.update(
             {
                 "coordenadas_usadas": coordenadas,
                 "pedidos_considerados": [e.id for e in entregas],
                 "pedidos_sem_coordenadas": pedidos_sem_coord,
+                "pedidos_sem_compativeis": pedidos_sem_compat,
                 "mapa_indices": mapa_indices,
             }
         )
