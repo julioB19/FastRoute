@@ -16,11 +16,11 @@ DEPOSITO_COORD = (-27.367681114267935, -53.40115242306388)
 
 # Config BG
 DB_USER = "postgres"
-DB_PASSWORD = "fastrout"
-#DB_PASSWORD = "1234"
+#DB_PASSWORD = "fastrout"
+DB_PASSWORD = "1234"
 DB_HOST = "localhost"
-DB_PORT = "3380"
-#DB_PORT = "5433"
+#DB_PORT = "3380"
+DB_PORT = "5433"
 DB_NAME = "FastRoute"
 
 config_banco = ConfiguracaoBanco(DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT)
