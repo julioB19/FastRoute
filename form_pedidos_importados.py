@@ -18,7 +18,7 @@ class ServicoPedidosImportados:
         self.por_pagina = por_pagina
 
     # -----------------------------------------------------
-    # Executor de SELECT compatível com BancoDados
+    # EXECUTOR DE SELECT 100% COMPATÍVEL COM SEU BancoDados
     # -----------------------------------------------------
     def _execute_select(self, query: str, params: Optional[Tuple] = None) -> List[Dict[str, Any]]:
         try:
@@ -34,27 +34,18 @@ class ServicoPedidosImportados:
             return []
 
     # -----------------------------------------------------
-    # Lista de clientes (para multi-seleção e pesquisa)
+    # Lista de clientes para filtro
     # -----------------------------------------------------
     def buscar_clientes(self):
         query = """
-            SELECT id_cliente, nome_cliente AS nome
+            SELECT id_cliente AS id, nome_cliente AS nome
             FROM CLIENTE
             ORDER BY nome_cliente;
         """
         return self._execute_select(query)
 
-    # Para multi-seleção de notas
-    def buscar_notas(self):
-        query = """
-            SELECT DISTINCT n_nota
-            FROM PEDIDO
-            ORDER BY n_nota DESC;
-        """
-        return self._execute_select(query)
-
     # -----------------------------------------------------
-    # Dashboard
+    # Funções NOVAS para o dashboard
     # -----------------------------------------------------
     def contar_completos(self):
         query = """
@@ -77,35 +68,19 @@ class ServicoPedidosImportados:
         return rows[0]["total"] if rows else 0
 
     # -----------------------------------------------------
-    # Builder dos filtros (NOVO)
+    # Construção dos filtros do frontend
     # -----------------------------------------------------
     def _build_filtros_sql(self, filtros: Optional[Dict[str, Any]]):
-
         where_parts = []
         params = []
 
         if not filtros:
             return "", params
 
-        # ----------------------------
-        # Filtro por nome parcial (digitável)
-        # ----------------------------
-        if filtros.get("cliente_nome"):
-            where_parts.append("c.nome_cliente ILIKE %s")
-            params.append(f"%{filtros['cliente_nome']}%")
+        if filtros.get("cliente_id"):
+            where_parts.append("p.id_cliente = %s")
+            params.append(int(filtros["cliente_id"]))
 
-        # ----------------------------
-        # Multi seleção de clientes
-        # ----------------------------
-        clientes_multi = filtros.get("clientes_multi")
-        if clientes_multi:
-            placeholders = ", ".join(["%s"] * len(clientes_multi))
-            where_parts.append(f"c.nome_cliente IN ({placeholders})")
-            params.extend(clientes_multi)
-
-        # ----------------------------
-        # Período da nota
-        # ----------------------------
         if filtros.get("data_inicio"):
             where_parts.append("p.dt_nota >= %s")
             params.append(filtros["data_inicio"])
@@ -114,43 +89,6 @@ class ServicoPedidosImportados:
             where_parts.append("p.dt_nota <= %s")
             params.append(filtros["data_fim"])
 
-        # ----------------------------
-        # Período da entrega
-        # ----------------------------
-        if filtros.get("entrega_inicio"):
-            where_parts.append("p.dt_entrega >= %s")
-            params.append(filtros["entrega_inicio"])
-
-        if filtros.get("entrega_fim"):
-            where_parts.append("p.dt_entrega <= %s")
-            params.append(filtros["entrega_fim"])
-
-        # ----------------------------
-        # Endereço
-        # ----------------------------
-        if filtros.get("endereco"):
-            where_parts.append("ec.endereco ILIKE %s")
-            params.append(f"%{filtros['endereco']}%")
-
-        # ----------------------------
-        # Cidade
-        # ----------------------------
-        if filtros.get("cidade"):
-            where_parts.append("ec.cidade ILIKE %s")
-            params.append(f"%{filtros['cidade']}%")
-
-        # ----------------------------
-        # Multi seleção de notas
-        # ----------------------------
-        notas_multi = filtros.get("notas_multi")
-        if notas_multi:
-            placeholders = ", ".join(["%s"] * len(notas_multi))
-            where_parts.append(f"p.n_nota IN ({placeholders})")
-            params.extend(notas_multi)
-
-        # ----------------------------
-        # Status via coordenadas
-        # ----------------------------
         if filtros.get("coords_not_null"):
             where_parts.append("ec.coordenadas IS NOT NULL AND ec.coordenadas <> ''")
 
@@ -158,10 +96,14 @@ class ServicoPedidosImportados:
             where_parts.append("ec.coordenadas IS NULL OR ec.coordenadas = ''")
 
         if filtros.get("entregues"):
-            where_parts.append("EXISTS (SELECT 1 FROM ENTREGA e WHERE e.pedido_n_nota = p.n_nota)")
+            where_parts.append(
+                "EXISTS (SELECT 1 FROM ENTREGA e WHERE e.pedido_n_nota = p.n_nota)"
+            )
 
         if filtros.get("excluir_entregues"):
-            where_parts.append("NOT EXISTS (SELECT 1 FROM ENTREGA e WHERE e.pedido_n_nota = p.n_nota)")
+            where_parts.append(
+                "NOT EXISTS (SELECT 1 FROM ENTREGA e WHERE e.pedido_n_nota = p.n_nota)"
+            )
 
         if where_parts:
             return " WHERE " + " AND ".join(where_parts), params
@@ -169,10 +111,9 @@ class ServicoPedidosImportados:
         return "", params
 
     # -----------------------------------------------------
-    # Conversor de linha -> dicionário frontend
+    # Mapeamento do pedido → frontend
     # -----------------------------------------------------
     def _map_pedido(self, row: Dict[str, Any]) -> Dict[str, Any]:
-
         def format_data(v):
             if not v:
                 return None
@@ -191,6 +132,7 @@ class ServicoPedidosImportados:
         tem_coords = coordenadas is not None and str(coordenadas).strip() != ""
         entregou = bool(row.get("entregues"))
 
+        # PADRÃO: usar ENTREGUE (singular) para consistência com o mapa
         if entregou:
             status = "ENTREGUE"
         elif tem_coords:
@@ -204,20 +146,18 @@ class ServicoPedidosImportados:
             "cliente": row.get("nome_cliente"),
             "endereco": endereco or "-",
             "data_nota": format_data(row.get("dt_nota")),
-            "data_entrega": format_data(row.get("dt_entrega")),
             "status": status,
             "_orig": row,
         }
 
     # -----------------------------------------------------
-    # Contar total de registros
+    # Contar total para paginação
     # -----------------------------------------------------
     def contar_pedidos(self, filtros: Optional[Dict[str, Any]] = None) -> int:
         where_sql, params = self._build_filtros_sql(filtros)
         query = f"""
             SELECT COUNT(*) AS total
             FROM PEDIDO p
-            LEFT JOIN CLIENTE c ON c.id_cliente = p.id_cliente
             LEFT JOIN ENDERECO_CLIENTE ec ON ec.id_endereco = p.id_endereco
             {where_sql};
         """
@@ -225,10 +165,9 @@ class ServicoPedidosImportados:
         return int(rows[0]["total"]) if rows else 0
 
     # -----------------------------------------------------
-    # Listar pedidos (com todos os filtros)
+    # Listar pedidos
     # -----------------------------------------------------
     def listar_pedidos(self, pagina: int = 1, filtros: Optional[Dict[str, Any]] = None):
-
         if pagina < 1:
             pagina = 1
 
@@ -241,7 +180,6 @@ class ServicoPedidosImportados:
             SELECT
                 p.n_nota,
                 p.dt_nota,
-                p.dt_entrega,
                 p.id_cliente,
                 c.nome_cliente,
                 ec.cidade,
@@ -274,14 +212,13 @@ class ServicoPedidosImportados:
         }
 
     # -----------------------------------------------------
-    # Modal de detalhes do pedido
+    # Buscar pedido (header da modal)
     # -----------------------------------------------------
     def buscar_pedido_por_id(self, pedido_id: int):
         query = """
             SELECT
                 p.n_nota,
                 p.dt_nota,
-                p.dt_entrega,
                 p.id_cliente,
                 c.nome_cliente,
                 ec.cidade,
@@ -300,7 +237,7 @@ class ServicoPedidosImportados:
         return rows[0] if rows else None
 
     # -----------------------------------------------------
-    # Itens do pedido
+    # Itens do pedido (com texto Normal / Agrotóxico)
     # -----------------------------------------------------
     def buscar_itens_pedido(self, n_nota: int):
         query = """
@@ -324,16 +261,13 @@ class ServicoPedidosImportados:
 
         return itens
 
-    # -----------------------------------------------------
-    # Dashboard contar com filtros
-    # -----------------------------------------------------
     def contar_com_filtros(self, filtros):
+        # Usa o MESMO builder correto
         where_sql, params = self._build_filtros_sql(filtros)
 
         sql = f"""
             SELECT COUNT(*) AS total
             FROM PEDIDO p
-            LEFT JOIN CLIENTE c ON c.id_cliente = p.id_cliente
             LEFT JOIN ENDERECO_CLIENTE ec ON ec.id_endereco = p.id_endereco
             {where_sql};
         """
