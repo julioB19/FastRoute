@@ -8,6 +8,7 @@ from form_pedidos_importados import ServicoPedidosImportados
 from jinja2 import TemplateNotFound
 import json
 import re
+import datetime
 
 app = Flask(__name__)
 app.secret_key = 'fastrout'  # Troque para uma chave mais segura em producao
@@ -396,6 +397,7 @@ def rotas_otimizadas():
     distancia = dados.get("distancia_total_km", 0.0)
     pedidos = dados.get("pedidos_considerados", [])
     pedidos_sem = dados.get("pedidos_sem_coordenadas", [])
+    pedidos_sem_compativeis = dados.get("pedidos_sem_compativeis", [])
     clientes_por_pedido = dados.get("clientes_por_pedido", {})
     coordenadas = dados.get("coordenadas_usadas", []) or []
     mapa_indices = dados.get("mapa_indices", {}) or {}
@@ -469,6 +471,47 @@ def rotas_otimizadas():
         )
     rotas_para_mapa_map = {r["veiculo"]: r for r in rotas_para_mapa}
 
+    # Dados consolidados para o relatorio gerencial/impresso
+    total_paradas = 0
+    clientes_unicos = set()
+    rotas_resumo = []
+    for veic, seq in rotas_filtradas.items():
+        notas_seq = seq or []
+        total_paradas += len(notas_seq)
+
+        clientes_seq = []
+        for nota in notas_seq:
+            nota_base = str(nota).split("#")[0]
+            cliente_nome = clientes_por_pedido.get(nota_base, "")
+            if cliente_nome:
+                clientes_seq.append(cliente_nome)
+                clientes_unicos.add(cliente_nome)
+            else:
+                clientes_seq.append("")
+
+        rotas_resumo.append(
+            {
+                "veiculo": veic,
+                "total_paradas": len(notas_seq),
+                "notas": notas_seq,
+                "clientes": clientes_seq,
+                "clientes_legiveis": [c for c in clientes_seq if c],
+                "primeira_entrega": notas_seq[0] if notas_seq else None,
+                "ultima_entrega": notas_seq[-1] if notas_seq else None,
+            }
+        )
+
+    relatorio_rotas = {
+        "data_emissao": datetime.datetime.now(),
+        "total_veiculos": len(rotas_filtradas),
+        "total_paradas": total_paradas,
+        "total_pedidos_considerados": len(pedidos or []),
+        "total_clientes_unicos": len(clientes_unicos),
+        "distancia_total": distancia,
+        "pedidos_sem_coordenadas": pedidos_sem,
+        "pedidos_sem_compativeis": pedidos_sem_compativeis,
+    }
+
     return render_template(
         'rotas_otimizadas.html',
         usuario=session.get('usuario_nome'),
@@ -485,6 +528,8 @@ def rotas_otimizadas():
         veiculos_disponiveis=veiculos_disponiveis,
         rotas_para_mapa=rotas_para_mapa,
         rotas_para_mapa_map=rotas_para_mapa_map,
+        relatorio_rotas=relatorio_rotas,
+        rotas_resumo=rotas_resumo,
     )
 
 @app.route("/otimizar_rotas", methods=["POST"])

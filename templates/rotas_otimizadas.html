@@ -9,11 +9,11 @@
         <div class="col-12 d-flex justify-content-between align-items-center">
             <div>
                 <h4 class="mb-1" style="color: rgb(237, 194, 0);">Rotas Otimizadas</h4>
-                <small class="text-light">Último resultado armazenado na sessão</small>
+                <small class="text-light">Ultimo resultado armazenado na sessao</small>
             </div>
             <div class="d-flex gap-2">
                 <a href="{{ url_for('pagina_otimizacao_rotas') }}" class="btn btn-cotri">
-                    <i class="bi bi-lightning-charge"></i> Nova otimização
+                    <i class="bi bi-lightning-charge"></i> Nova otimizacao
                 </a>
                 <button class="btn btn-outline-light" onclick="window.print()">
                     <i class="bi bi-printer"></i> Imprimir
@@ -44,10 +44,10 @@
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label text-dark">Filtrar por veículo</label>
+                    <label class="form-label text-dark">Filtrar por veiculo</label>
                     <div class="input-group">
-                        <input id="filtroVeiculo" type="text" class="form-control" name="veiculo" value="{{ veiculos_filtrados[0] if veiculos_filtrados else '' }}" placeholder="Placa/veículo">
-                        <button class="btn btn-cotri btn-lookup" type="button" data-tipo="veiculo" title="Pesquisar veículo">
+                        <input id="filtroVeiculo" type="text" class="form-control" name="veiculo" value="{{ veiculos_filtrados[0] if veiculos_filtrados else '' }}" placeholder="Placa/veiculo">
+                        <button class="btn btn-cotri btn-lookup" type="button" data-tipo="veiculo" title="Pesquisar veiculo">
                             <i class="bi bi-search"></i>
                         </button>
                     </div>
@@ -61,14 +61,123 @@
         </div>
     </div>
 
-    <div class="card shadow-sm">
+    {% set resumo = relatorio_rotas or {} %}
+    <div class="card shadow-sm mb-3 relatorio-card relatorio-print-only">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <h5 class="mb-0 text-dark">Relatorio gerencial de rotas</h5>
+                <small class="text-muted">Gerado em {{ resumo.data_emissao.strftime('%d/%m/%Y %H:%M') if resumo.data_emissao else '-' }}</small>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row g-3 text-center">
+                <div class="col-6 col-md-3">
+                    <div class="resumo-box h-100">
+                        <p class="resumo-label mb-1">Distancia estimada</p>
+                        <h5 class="mb-1">{{ "%.1f"|format(resumo.distancia_total or 0) }} km</h5>
+                        <small class="text-muted">Somatorio das rotas planejadas</small>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="resumo-box h-100">
+                        <p class="resumo-label mb-1">Veiculos alocados</p>
+                        <h5 class="mb-1">{{ resumo.total_veiculos or 0 }}</h5>
+                        <small class="text-muted">Com pelo menos uma entrega</small>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="resumo-box h-100">
+                        <p class="resumo-label mb-1">Paradas planejadas</p>
+                        <h5 class="mb-1">{{ resumo.total_paradas or 0 }}</h5>
+                        <small class="text-muted">Sequencias de descarga</small>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="resumo-box h-100">
+                        <p class="resumo-label mb-1">Clientes atendidos</p>
+                        <h5 class="mb-1">{{ resumo.total_clientes_unicos or 0 }}</h5>
+                        <small class="text-muted">Pedidos considerados: {{ resumo.total_pedidos_considerados or 0 }}</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-responsive relatorio-print mt-4">
+                <table class="table table-sm table-bordered mb-0 relatorio-print-table">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Veiculo</th>
+                            <th class="text-center">Paradas</th>
+                            <th>Sequencia planejada</th>
+                            <th>Clientes atendidos</th>
+                            <th>Observacoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if rotas_resumo %}
+                            {% for rota in rotas_resumo %}
+                            <tr>
+                                <td>{{ rota.veiculo }}</td>
+                                <td class="text-center fw-semibold">{{ rota.total_paradas }}</td>
+                                <td>
+                                    {% if rota.notas %}
+                                        {{ rota.notas|join(" -> ") }}
+                                    {% else %}
+                                        Sem entregas
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if rota.clientes_legiveis %}
+                                        {{ rota.clientes_legiveis|join(", ") }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td class="small">
+                                    {% if rota.primeira_entrega %}
+                                        Primeira: {{ rota.primeira_entrega }} | Ultima: {{ rota.ultima_entrega }}
+                                    {% else %}
+                                        Sem paradas registradas.
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">Nenhuma rota processada para este relatorio.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="row mt-3 g-3 relatorio-print">
+                <div class="col-md-6">
+                    <div class="d-flex flex-column h-100 gap-2 resumo-metricas">
+                        <div class="resumo-chip">
+                            <div class="chip-icon text-success"><i class="bi bi-geo-alt-fill"></i></div>
+                            <div>
+                                <div class="chip-label">Distancia total estimada</div>
+                                <div class="chip-value">{{ "%.1f"|format(resumo.distancia_total or 0) }} km</div>
+                            </div>
+                        </div>
+                        <div class="resumo-chip">
+                            <div class="chip-icon text-primary"><i class="bi bi-people-fill"></i></div>
+                            <div>
+                                <div class="chip-label">Clientes atendidos</div>
+                                <div class="chip-value">{{ resumo.total_clientes_unicos or 0 }} ({{ resumo.total_pedidos_considerados or 0 }} notas)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+               
+    <div class="card shadow-sm no-print">
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th>Veículo</th>
-                            <th>Sequência (Notas)</th>
+                            <th>Veiculo</th>
+                            <th>Sequencia (Notas)</th>
                             <th class="text-end">Resumo</th>
                         </tr>
                     </thead>
@@ -94,9 +203,9 @@
                             <tr class="collapse" id="collapse-{{ loop.index }}" data-veiculo="{{ veic }}" data-map-id="{{ rota_info.map_id if rota_info else '' }}">
                                 <td colspan="3">
                                     <div class="p-3 bg-light rounded">
-                                        <p class="mb-1 text-dark"><strong>Veículo:</strong> {{ veic }}</p>
+                                        <p class="mb-1 text-dark"><strong>Veiculo:</strong> {{ veic }}</p>
                                         {% if rota_info %}
-                                            <p class="mb-2 text-dark"><strong>Sequência:</strong> {{ rota_info.notas|join(" -> ") }}</p>
+                                            <p class="mb-2 text-dark"><strong>Sequencia:</strong> {{ rota_info.notas|join(" -> ") }}</p>
                                             <div id="map-container-{{ loop.index }}" class="map-container">
                                                 <div id="{{ rota_info.map_id }}" class="mapa-rota"></div>
                                             </div>
@@ -139,15 +248,125 @@
 </div>
 
 <style>
+.resumo-box {
+    background: #f6f8fb;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 12px;
+    text-align: left;
+}
+
+.resumo-label {
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: #6c757d;
+}
+
+.relatorio-card .badge {
+    letter-spacing: 0.05em;
+}
+
+.relatorio-print-table td,
+.relatorio-print-table th {
+    font-size: 13px;
+}
+
+.relatorio-print-only {
+    display: none;
+}
+
+.resumo-chip {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: #fff;
+}
+
+.chip-icon {
+    font-size: 18px;
+}
+
+.chip-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6c757d;
+}
+
+.chip-value {
+    font-weight: 700;
+    color: #111;
+}
+
+.pendencias-card {
+    border: 1px solid #f3d19c;
+    background: #fff8ec;
+    border-radius: 10px;
+    padding: 12px;
+}
+
+.pendencia-badge {
+    background: #f59e0b;
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.pendencia-item {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 8px 0;
+    border-top: 1px dashed #f3d19c;
+}
+
+.pendencia-item:first-of-type {
+    border-top: none;
+}
+
+.pendencia-icon {
+    font-size: 18px;
+    width: 24px;
+    text-align: center;
+}
+
 @media print {
+    @page {
+        margin: 8mm 10mm;
+    }
     .no-print {
         display: none !important;
     }
     body {
         background: #fff;
+        margin: 0;
+    }
+    .container-fluid {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
     }
     .card {
         box-shadow: none !important;
+    }
+    .relatorio-print-only {
+        display: block !important;
+    }
+    .relatorio-card {
+        border: none;
+        page-break-inside: avoid;
+    }
+    .relatorio-print table {
+        page-break-inside: auto;
+    }
+    .relatorio-print table tr {
+        page-break-inside: avoid;
     }
 }
 
