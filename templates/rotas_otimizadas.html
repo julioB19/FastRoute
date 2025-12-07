@@ -474,8 +474,39 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Leaflet maps para rotas
     const rotasMapa = {{ rotas_para_mapa_map|tojson }};
+    const rotasClientes = {{ rotas_clientes|tojson }};
     const mapas = {};
-    const initMap = (rota) => {
+    const rotasOsrm = {};
+
+    // Desenha rota real em estrada usando OSRM (OpenStreetMap)
+    const desenharRotaReal = (map, rota) => {
+        const coords = Array.isArray(rota?.rota) ? rota.rota : [];
+        if (coords.length < 2) return null;
+
+        const coordsOsrm = coords.map((c) => `${c[1]},${c[0]}`).join(";");
+        const url = `https://router.project-osrm.org/route/v1/driving/${coordsOsrm}?overview=full&geometries=geojson&steps=false&continue_straight=true`;
+
+        return fetch(url)
+            .then((res) => res.json())
+            .then((data) => {
+                if (!data || data.code !== "Ok" || !data.routes || !data.routes.length) {
+                    throw new Error("OSRM sem rota");
+                }
+                const linha = L.geoJSON(data.routes[0].geometry, {
+                    style: { color: "#1b6a3f", weight: 5, opacity: 0.9 },
+                }).addTo(map);
+                map.fitBounds(linha.getBounds(), { padding: [20, 20] });
+                return linha;
+            })
+            .catch(() => {
+                // fallback: desenha linha direta se OSRM falhar
+                const poly = L.polyline(coords, { color: "#1b6a3f", weight: 4, opacity: 0.85 }).addTo(map);
+                map.fitBounds(poly.getBounds(), { padding: [20, 20] });
+                return poly;
+            });
+    };
+
+    const initMap = (rota, veiculo) => {
         if (!rota || !rota.map_id) {
             return;
         }
@@ -489,18 +520,32 @@ document.addEventListener("DOMContentLoaded", () => {
             attribution: '&copy; OpenStreetMap'
         }).addTo(map);
 
-        if (rota.rota && rota.rota.length) {
-            const poly = L.polyline(rota.rota, { color: "#1b6a3f", weight: 4, opacity: 0.85 }).addTo(map);
-            map.fitBounds(poly.getBounds(), { padding: [20, 20] });
-        }
+        // Marcadores numerados na ordem da rota
+        const clientesSeq = rotasClientes[veiculo] || [];
+        const notasSeq = Array.isArray(rota.notas) ? rota.notas : [];
 
         (rota.pontos || []).forEach((p) => {
             const icon = L.divIcon({
                 html: `<div class="marker-num">${p.label}</div>`,
                 className: "marker-num-wrapper"
             });
-            L.marker([p.lat, p.lng], { icon }).addTo(map);
+            const marker = L.marker([p.lat, p.lng], { icon }).addTo(map);
+
+            const posicao = Number(p.label);
+            let tooltipTitle = "";
+            if (posicao === 0) {
+                tooltipTitle = "Deposito (saida/retorno)";
+            } else {
+                const idxEntrega = posicao - 1;
+                const nomeCliente = clientesSeq[idxEntrega] || "Cliente nao informado";
+                const entregaId = notasSeq[idxEntrega] || "Entrega";
+                tooltipTitle = `${nomeCliente}<br>Entrega: ${entregaId}`;
+            }
+            marker.bindTooltip(tooltipTitle, { direction: "top", sticky: true });
         });
+
+        // Rota em estrada (OSRM) respeitando a ordem recebida
+        rotasOsrm[rota.map_id] = desenharRotaReal(map, rota);
 
         mapas[rota.map_id] = map;
     };
@@ -531,7 +576,7 @@ document.addEventListener("DOMContentLoaded", () => {
         elem.addEventListener('shown.bs.collapse', () => {
             const veic = elem.getAttribute("data-veiculo");
             const rota = veic ? rotasMapa[veic] : null;
-            initMap(rota);
+            initMap(rota, veic);
             if (rota?.map_id && mapas[rota.map_id]) {
                 setTimeout(() => mapas[rota.map_id].invalidateSize(), 150);
             }
