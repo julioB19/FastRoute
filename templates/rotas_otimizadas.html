@@ -5,11 +5,11 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <div class="container-fluid mt-3 px-3 px-md-4">
-    <div class="row mb-3 no-print">
+            <div class="row mb-3 no-print">
         <div class="col-12 d-flex justify-content-between align-items-center">
             <div>
                 <h4 class="mb-1" style="color: rgb(237, 194, 0);">Rotas Otimizadas</h4>
-                <small class="text-light">Ultimo resultado armazenado na sessao</small>
+                <small class="text-light">Resultados carregados do banco de dados</small>
             </div>
             <div class="d-flex gap-2">
                 <a href="{{ url_for('pagina_otimizacao_rotas') }}" class="btn btn-cotri">
@@ -24,15 +24,15 @@
 
     <div class="card shadow-sm mb-3">
         <div class="card-body">
+            {% if mensagem_alerta %}
+            <div class="alert alert-warning py-2 px-3 mb-3">
+                {{ mensagem_alerta }}
+            </div>
+            {% endif %}
             <form id="filtrosRotas" method="get" class="row g-3 align-items-end no-print">
                 <div class="col-md-3">
-                    <label class="form-label text-dark">Filtrar por nota</label>
-                    <div class="input-group">
-                        <input id="filtroNota" type="text" class="form-control" name="nota" value="{{ notas_filtradas[0] if notas_filtradas else '' }}" placeholder="Ex: 123">
-                        <button class="btn btn-cotri btn-lookup" type="button" data-tipo="nota" title="Pesquisar nota">
-                            <i class="bi bi-search"></i>
-                        </button>
-                    </div>
+                    <label class="form-label text-dark">Filtrar por data da entrega</label>
+                    <input id="filtroData" type="date" class="form-control" name="data" value="{{ data_filtro or '' }}">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label text-dark">Filtrar por cliente</label>
@@ -169,7 +169,10 @@
                         </div>
                     </div>
                 </div>
-               
+            </div>
+        </div>
+    </div>
+
     <div class="card shadow-sm no-print">
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -177,18 +180,21 @@
                     <thead class="table-light">
                         <tr>
                             <th>Veiculo</th>
-                            <th>Sequencia (Notas)</th>
+                            <th>Sequencia (Clientes)</th>
                             <th class="text-end">Resumo</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% if rotas %}
                             {% for veic, seq in rotas.items() %}
+                            {% set info = rotas_info_map.get(veic) %}
+                            {% set veic_label = info.label if info else veic %}
                             <tr>
-                                <td>{{ veic }}</td>
+                                <td>{{ veic_label }}</td>
+                                {% set clientes_seq = rotas_clientes.get(veic) %}
                                 <td>
-                                    {% if seq %}
-                                        {{ seq|join(" -> ") }}
+                                    {% if clientes_seq %}
+                                        {{ clientes_seq|join(" -> ") }}
                                     {% else %}
                                         Sem entregas
                                     {% endif %}
@@ -203,9 +209,10 @@
                             <tr class="collapse" id="collapse-{{ loop.index }}" data-veiculo="{{ veic }}" data-map-id="{{ rota_info.map_id if rota_info else '' }}">
                                 <td colspan="3">
                                     <div class="p-3 bg-light rounded">
-                                        <p class="mb-1 text-dark"><strong>Veiculo:</strong> {{ veic }}</p>
+                                        <p class="mb-1 text-dark"><strong>Veiculo:</strong> {{ veic_label }}</p>
                                         {% if rota_info %}
-                                            <p class="mb-2 text-dark"><strong>Sequencia:</strong> {{ rota_info.notas|join(" -> ") }}</p>
+                                            {% set clientes_seq = rotas_clientes.get(veic) %}
+                                            <p class="mb-2 text-dark"><strong>Sequencia (clientes):</strong> {{ clientes_seq|join(" -> ") if clientes_seq else 'Sem entregas' }}</p>
                                             <div id="map-container-{{ loop.index }}" class="map-container">
                                                 <div id="{{ rota_info.map_id }}" class="mapa-rota"></div>
                                             </div>
@@ -218,7 +225,7 @@
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="2" class="text-center py-4">Nenhum resultado encontrado. Execute uma otimização.</td>
+                                <td colspan="3" class="text-center py-4">Nenhum resultado encontrado. Execute uma otimizacao.</td>
                             </tr>
                         {% endif %}
                     </tbody>
@@ -394,23 +401,27 @@
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
+    const normalizarLista = (lista) => {
+        if (!Array.isArray(lista)) return [];
+        return lista.map((v) => (v === null || v === undefined ? "" : String(v)));
+    };
+
     const dadosLookup = {
-        nota: {{ notas_disponiveis|tojson }},
-        cliente: {{ clientes_disponiveis|tojson }},
-        veiculo: {{ veiculos_disponiveis|tojson }},
+        cliente: normalizarLista({{ clientes_disponiveis|tojson }}),
+        veiculo: normalizarLista({{ veiculos_disponiveis|tojson }}),
     };
 
     const campos = {
-        nota: document.getElementById("filtroNota"),
         cliente: document.getElementById("filtroCliente"),
         veiculo: document.getElementById("filtroVeiculo"),
     };
 
     const modalEl = document.getElementById("modalLookup");
-    const modal = new bootstrap.Modal(modalEl);
+    const modal = typeof bootstrap !== "undefined" ? new bootstrap.Modal(modalEl) : null;
     const lookupInput = document.getElementById("lookupInput");
     const lookupResultados = document.getElementById("lookupResultados");
     const lookupTitulo = document.getElementById("lookupTitulo");
+    const filtrosForm = document.getElementById("filtrosRotas");
     let tipoAtual = null;
     let valoresAtuais = [];
 
@@ -418,6 +429,7 @@ document.addEventListener("DOMContentLoaded", () => {
         lookupResultados.innerHTML = "";
         const filtro = (termo || "").toLowerCase();
         valoresAtuais
+            .map((v) => String(v))
             .filter((v) => v.toLowerCase().includes(filtro))
             .slice(0, 100)
             .forEach((v) => {
@@ -429,7 +441,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (tipoAtual && campos[tipoAtual]) {
                         campos[tipoAtual].value = v;
                     }
-                    modal.hide();
+                    if (modal) modal.hide();
+                    if (filtrosForm) filtrosForm.submit();
                 };
                 lookupResultados.appendChild(item);
             });
@@ -448,8 +461,10 @@ document.addEventListener("DOMContentLoaded", () => {
             lookupTitulo.textContent = `Pesquisar ${tipoAtual}`;
             lookupInput.value = campos[tipoAtual]?.value || "";
             renderResultados(lookupInput.value);
-            modal.show();
-            setTimeout(() => lookupInput.focus(), 150);
+            if (modal) {
+                modal.show();
+                setTimeout(() => lookupInput.focus(), 150);
+            }
         });
     });
 

@@ -125,10 +125,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 : "0.00";
 
             Swal.fire({
-                title: 'Rotas otimizadas',
+                title: 'Otimização concluída!',
                 html: `
-                    <p><strong>Distância total estimada:</strong> ${distancia} km</p>
-                    <p><strong>Resumo:</strong><br><span style="white-space:pre-wrap;text-align:left;display:block;">${resumoRotas}</span></p>
+                    <p style="margin-bottom:6px;"><strong>Distância total estimada:</strong> ${distancia} km</p>
+                    <p style="margin-bottom:6px;"><strong>Rotas criadas:</strong><br><span style="white-space:pre-wrap;text-align:left;display:block;">${resumoRotas}</span></p>
+                    <p style="margin:0;">Clique em "Ver relatório" para visualizar e filtrar por data/cliente/veículo.</p>
                 `,
                 icon: 'success',
                 showCancelButton: true,

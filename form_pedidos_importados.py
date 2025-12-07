@@ -322,6 +322,109 @@ class ServicoPedidosImportados:
     # -----------------------------------------------------
     # OTIMIZA��O DE ROTAS
     # -----------------------------------------------------
+
+    def recuperar_ultima_otimizacao_salva(self, data_referencia: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        Reconstroi uma otimizacao registrada em ENTREGA/ROTA.
+        Se data_referencia nao for informada, pega a data mais recente.
+        """
+        try:
+            data_ref = None
+            if data_referencia:
+                try:
+                    data_ref = datetime.datetime.strptime(data_referencia, "%Y-%m-%d").date()
+                except Exception:
+                    data_ref = None
+
+            params = ()
+            sql_rotas = """
+                SELECT e.id_entrega, r.id_rota, e.veiculo_placa, r.sequencia_descarga, e.data_entrega
+                FROM entrega e
+                JOIN rota r ON r.entrega_id_entrega = e.id_entrega
+                WHERE e.veiculo_placa IS NOT NULL
+                  AND r.sequencia_descarga IS NOT NULL
+            """
+            if data_ref:
+                sql_rotas += " AND e.data_entrega = %s"
+                params = (data_ref,)
+            else:
+                # quando nao filtrado por data, traz todas as rotas
+                params = ()
+            sql_rotas += " ORDER BY e.data_entrega DESC NULLS LAST, e.id_entrega DESC"
+
+            rotas_rows = self._execute_select(sql_rotas, params)
+
+            rotas_por_veiculo: Dict[str, List[str]] = {}
+            datas_encontradas = set()
+            for row in rotas_rows:
+                veic = (row.get("veiculo_placa") or "").strip()
+                entrega_id = row.get("id_entrega")
+                rota_id = row.get("id_rota")
+                seq_raw = row.get("sequencia_descarga") or ""
+                seq = [p.strip() for p in str(seq_raw).split(",") if p.strip()]
+                if not veic or not seq:
+                    continue
+                chave = f"{veic}-{rota_id or entrega_id}" if (rota_id or entrega_id) is not None else veic
+                rotas_por_veiculo[chave] = seq
+                if row.get("data_entrega"):
+                    datas_encontradas.add(row.get("data_entrega"))
+
+            if not rotas_por_veiculo:
+                return None
+
+            notas_unicas = set()
+            for seq in rotas_por_veiculo.values():
+                for n in seq:
+                    notas_unicas.add(str(n).split("#")[0])
+
+            coords_map: Dict[str, Tuple[float, float]] = {}
+            clientes_map: Dict[str, str] = {}
+            if notas_unicas:
+                placeholders = ",".join(["%s"] * len(notas_unicas))
+                coords_rows = self._execute_select(
+                    f"""
+                    SELECT p.n_nota, ec.coordenadas, c.nome_cliente
+                    FROM pedido p
+                    LEFT JOIN endereco_cliente ec ON ec.id_endereco = p.id_endereco
+                    LEFT JOIN cliente c ON c.id_cliente = p.id_cliente
+                    WHERE p.n_nota IN ({placeholders});
+                    """,
+                    tuple(notas_unicas),
+                )
+                for row in coords_rows:
+                    nota = str(row.get("n_nota"))
+                    coord = self._parse_coordenadas(row.get("coordenadas"))
+                    if coord:
+                        coords_map[nota] = coord
+                    nome_cli = row.get("nome_cliente")
+                    if nome_cli:
+                        clientes_map[nota] = nome_cli
+
+            coordenadas_usadas: List[Tuple[float, float]] = [DEPOSITO_COORD_PADRAO]
+            mapa_indices: Dict[str, int] = {}
+            for seq in rotas_por_veiculo.values():
+                for nota in seq:
+                    base = str(nota).split("#")[0]
+                    if nota not in mapa_indices and base in coords_map:
+                        mapa_indices[nota] = len(coordenadas_usadas)
+                        coordenadas_usadas.append(coords_map[base])
+
+            return {
+                "rotas_por_veiculo": rotas_por_veiculo,
+                "distancia_total_km": 0.0,
+                "custo_fitness": 0.0,
+                "coordenadas_usadas": coordenadas_usadas,
+                "pedidos_considerados": list(notas_unicas),
+                "pedidos_sem_coordenadas": [],
+                "pedidos_sem_compativeis": [],
+                "mapa_indices": mapa_indices,
+                "clientes_por_pedido": clientes_map,
+                "data_referencia": data_ref if data_ref else (sorted(datas_encontradas)[0] if datas_encontradas else None),
+            }
+        except Exception as e:
+            print("Erro ao recuperar ultima otimizacao salva:", e)
+            return None
+
     def _parse_coordenadas(self, coordenadas: Optional[str]) -> Optional[Tuple[float, float]]:
         if not coordenadas:
             return None
@@ -389,6 +492,8 @@ class ServicoPedidosImportados:
                 cursor.execute("SELECT COALESCE(MAX(id_entrega), 0) FROM entrega;")
                 next_id = (cursor.fetchone() or [0])[0] + 1
 
+                rota_por_veiculo_entrega = {}
+
                 for veic, pedidos in (rotas_por_veiculo or {}).items():
                     if not pedidos:
                         continue
@@ -430,25 +535,9 @@ class ServicoPedidosImportados:
                                 (id_entrega, "ENTREGUE", int(base_nota), veic),
                             )
 
-                        # ROTA: uma rota por entrega, com a sequencia daquela rota do veiculo
-                        cursor.execute(
-                            "SELECT id_rota FROM rota WHERE entrega_id_entrega = %s LIMIT 1;",
-                            (id_entrega,),
-                        )
-                        rota_row = cursor.fetchone()
-                        if rota_row:
-                            cursor.execute(
-                                "UPDATE rota SET sequencia_descarga = %s WHERE id_rota = %s;",
-                                (seq_descarga, rota_row[0]),
-                            )
-                        else:
-                            cursor.execute(
-                                """
-                                INSERT INTO rota (sequencia_descarga, entrega_id_entrega)
-                                VALUES (%s, %s);
-                                """,
-                                (seq_descarga, id_entrega),
-                            )
+                        # guarda um unico id_entrega para registrar rota do veiculo
+                        if veic not in rota_por_veiculo_entrega:
+                            rota_por_veiculo_entrega[veic] = id_entrega
 
                         # USUARIO_ENTREGA: vincula o usuario logado se informado
                         if usuario_id:
@@ -460,6 +549,34 @@ class ServicoPedidosImportados:
                                 """,
                                 (id_entrega, int(usuario_id)),
                             )
+
+                # ROTA: grava uma rota por veiculo usando o primeiro id_entrega associado
+                for veic, pedidos in (rotas_por_veiculo or {}).items():
+                    if not pedidos:
+                        continue
+                    seq_descarga = ",".join(str(p) for p in pedidos)
+                    entrega_id = rota_por_veiculo_entrega.get(veic)
+                    if not entrega_id:
+                        continue
+
+                    cursor.execute(
+                        "SELECT id_rota FROM rota WHERE entrega_id_entrega = %s LIMIT 1;",
+                        (entrega_id,),
+                    )
+                    rota_row = cursor.fetchone()
+                    if rota_row:
+                        cursor.execute(
+                            "UPDATE rota SET sequencia_descarga = %s WHERE id_rota = %s;",
+                            (seq_descarga, rota_row[0]),
+                        )
+                    else:
+                        cursor.execute(
+                            """
+                            INSERT INTO rota (sequencia_descarga, entrega_id_entrega)
+                            VALUES (%s, %s);
+                            """,
+                            (seq_descarga, entrega_id),
+                        )
 
                 conn.commit()
             return True, None

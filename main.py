@@ -392,7 +392,20 @@ def pagina_otimizacao_rotas():
 @app.route('/rotas_otimizadas')
 @login_obrigatorio
 def rotas_otimizadas():
-    dados = session.get("ultima_otimizacao") or {}
+    data_filtro = (request.args.get("data") or "").strip()
+    origem_resultado = "banco"
+
+    def carregar_otimizacao(data_ref=None):
+        try:
+            return servico_pedidos.recuperar_ultima_otimizacao_salva(data_ref)
+        except Exception as e:
+            print("Nao foi possivel recuperar otimizacoes do banco:", e)
+            return None
+
+    dados = carregar_otimizacao(data_filtro) if data_filtro else carregar_otimizacao()
+    if not dados:
+        dados = {}
+
     rotas = dados.get("rotas_por_veiculo", {})
     distancia = dados.get("distancia_total_km", 0.0)
     pedidos = dados.get("pedidos_considerados", [])
@@ -402,41 +415,41 @@ def rotas_otimizadas():
     coordenadas = dados.get("coordenadas_usadas", []) or []
     mapa_indices = dados.get("mapa_indices", {}) or {}
 
-    notas_filtradas = [n.strip().lower() for n in request.args.getlist("nota") if n.strip()]
     clientes_filtrados = [c.strip().lower() for c in request.args.getlist("cliente") if c.strip()]
     veiculos_filtrados = [v.strip().lower() for v in request.args.getlist("veiculo") if v.strip()]
 
-    if not notas_filtradas and request.args.get("nota"):
-        notas_filtradas = [(request.args.get("nota") or "").strip().lower()]
     if not clientes_filtrados and request.args.get("cliente"):
         clientes_filtrados = [(request.args.get("cliente") or "").strip().lower()]
     if not veiculos_filtrados and request.args.get("veiculo"):
         veiculos_filtrados = [(request.args.get("veiculo") or "").strip().lower()]
 
     rotas_filtradas = {}
+    rotas_info_map = {}
     for veic, seq in rotas.items():
         veic_ok = True
-        nota_ok = True
         cliente_ok = True
+        veic_base, veic_extra = (str(veic).split("-", 1) + [""])[:2]
 
         if veiculos_filtrados:
-            veic_ok = any(fv in str(veic).lower() for fv in veiculos_filtrados)
-
-        if notas_filtradas:
-            nota_ok = any(any(f in str(n).lower() for f in notas_filtradas) for n in (seq or []))
+            veic_ok = any(fv in veic_base.lower() for fv in veiculos_filtrados)
 
         if clientes_filtrados:
             cliente_ok = any(
-                any(fc in (clientes_por_pedido.get(str(n), "") or "").lower() for fc in clientes_filtrados)
+                any(fc in (clientes_por_pedido.get(str(n).split("#")[0], "") or "").lower() for fc in clientes_filtrados)
                 for n in (seq or [])
             )
 
-        if veic_ok and nota_ok and cliente_ok:
+        if veic_ok and cliente_ok:
             rotas_filtradas[veic] = seq
+            rotas_info_map[veic] = {
+                "veiculo": veic_base,
+                "rota_id": veic_extra,
+                "label": veic_base if not veic_extra else f"{veic_base} (rota {veic_extra})",
+            }
 
-    notas_disponiveis = sorted({str(n) for seq in rotas.values() for n in (seq or [])})
     clientes_disponiveis = sorted({v for v in clientes_por_pedido.values() if v})
-    veiculos_disponiveis = sorted(rotas.keys())
+    veiculos_disponiveis = sorted({(str(v).split("-", 1)[0]) for v in rotas.keys()})
+    rotas_clientes = {}
 
     rotas_para_mapa = []
     for idx, (veic, seq) in enumerate(rotas_filtradas.items()):
@@ -488,6 +501,7 @@ def rotas_otimizadas():
                 clientes_unicos.add(cliente_nome)
             else:
                 clientes_seq.append("")
+        rotas_clientes[veic] = clientes_seq
 
         rotas_resumo.append(
             {
@@ -512,6 +526,21 @@ def rotas_otimizadas():
         "pedidos_sem_compativeis": pedidos_sem_compativeis,
     }
 
+    data_referencia_raw = dados.get("data_referencia")
+    if isinstance(data_referencia_raw, (datetime.date, datetime.datetime)):
+        data_referencia = data_referencia_raw.strftime("%d/%m/%Y")
+    elif data_referencia_raw:
+        data_referencia = str(data_referencia_raw)
+    else:
+        data_referencia = None
+
+    mensagem_alerta = None
+    if not rotas:
+        if data_filtro:
+            mensagem_alerta = f"Nenhuma rota encontrada para a data {data_filtro}."
+        else:
+            mensagem_alerta = "Nenhuma rota encontrada."
+
     return render_template(
         'rotas_otimizadas.html',
         usuario=session.get('usuario_nome'),
@@ -520,16 +549,20 @@ def rotas_otimizadas():
         distancia=distancia,
         pedidos_considerados=pedidos,
         pedidos_sem_coordenadas=pedidos_sem,
-        notas_filtradas=notas_filtradas,
         clientes_filtrados=clientes_filtrados,
         veiculos_filtrados=veiculos_filtrados,
-        notas_disponiveis=notas_disponiveis,
         clientes_disponiveis=clientes_disponiveis,
         veiculos_disponiveis=veiculos_disponiveis,
         rotas_para_mapa=rotas_para_mapa,
         rotas_para_mapa_map=rotas_para_mapa_map,
         relatorio_rotas=relatorio_rotas,
         rotas_resumo=rotas_resumo,
+        rotas_clientes=rotas_clientes,
+        rotas_info_map=rotas_info_map,
+        origem_resultado=origem_resultado,
+        data_referencia=data_referencia,
+        data_filtro=data_filtro,
+        mensagem_alerta=mensagem_alerta,
     )
 
 @app.route("/otimizar_rotas", methods=["POST"])
@@ -595,6 +628,7 @@ def otimizar_rotas():
                 "pedidos_sem_compativeis": resultado.get("pedidos_sem_compativeis", []),
                 "mapa_indices": resultado.get("mapa_indices", {}),
                 "clientes_por_pedido": clientes_por_pedido,
+                "data_referencia": datetime.date.today().isoformat(),
             }
             session["ultima_otimizacao"] = serializado
         except Exception as e:
