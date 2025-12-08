@@ -213,6 +213,12 @@
                                         {% if rota_info %}
                                             {% set clientes_seq = rotas_clientes.get(veic) %}
                                             <p class="mb-2 text-dark"><strong>Sequencia (clientes):</strong> {{ clientes_seq|join(" -> ") if clientes_seq else 'Sem entregas' }}</p>
+                                            <div class="d-flex align-items-center gap-2 mb-2">
+                                                <button class="btn btn-success btn-sm btn-whatsapp-rota" type="button" data-veiculo="{{ veic }}">
+                                                    <i class="bi bi-whatsapp"></i> Enviar rota por WhatsApp
+                                                </button>
+                                                <small class="text-muted">Gera link do Google Maps e abre wa.me</small>
+                                            </div>
                                             <div id="map-container-{{ loop.index }}" class="map-container">
                                                 <div id="{{ rota_info.map_id }}" class="mapa-rota"></div>
                                             </div>
@@ -249,6 +255,30 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal WhatsApp rota -->
+<div class="modal fade" id="modalWhatsappRota" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Enviar rota por WhatsApp</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2 text-muted">Informe o numero no formato DDI + DDD + numero (somente digitos). Abriremos o wa.me com a rota pronta.</p>
+                <div class="mb-3">
+                    <label class="form-label">Numero do WhatsApp</label>
+                    <input type="tel" class="form-control" id="whatsNumero" placeholder="55DDDXXXXXXXXX">
+                </div>
+                <div class="alert alert-warning py-2 px-3 mb-0" id="whatsAviso" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" id="btnEnviarWhatsapp">Abrir wa.me</button>
             </div>
         </div>
     </div>
@@ -477,6 +507,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const rotasClientes = {{ rotas_clientes|tojson }};
     const mapas = {};
     const rotasOsrm = {};
+    const modalWhatsappEl = document.getElementById("modalWhatsappRota");
+    const modalWhatsapp = modalWhatsappEl ? new bootstrap.Modal(modalWhatsappEl) : null;
+    let rotaWhatsappAtual = null;
 
     // Desenha rota real em estrada usando OSRM (OpenStreetMap)
     const desenharRotaReal = (map, rota) => {
@@ -581,6 +614,60 @@ document.addEventListener("DOMContentLoaded", () => {
                 setTimeout(() => mapas[rota.map_id].invalidateSize(), 150);
             }
         });
+    });
+
+    // Botao WhatsApp rota
+    document.querySelectorAll(".btn-whatsapp-rota").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const veic = btn.getAttribute("data-veiculo");
+            rotaWhatsappAtual = veic ? rotasMapa[veic] : null;
+            document.getElementById("whatsNumero").value = "";
+            document.getElementById("whatsAviso").style.display = "none";
+            if (modalWhatsapp) modalWhatsapp.show();
+        });
+    });
+
+    const buildGmapsUrl = (rota) => {
+        const coords = Array.isArray(rota?.rota) ? rota.rota : [];
+        if (coords.length < 2) return null;
+        const origin = `${coords[0][0]},${coords[0][1]}`;
+        const destination = `${coords[coords.length - 1][0]},${coords[coords.length - 1][1]}`;
+        const waypointsArr = coords.slice(1, -1).map((c) => `${c[0]},${c[1]}`);
+        let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
+        if (waypointsArr.length) {
+            url += `&waypoints=${encodeURIComponent(waypointsArr.join("|"))}`;
+        }
+        return url;
+    };
+
+    const btnEnviarWhatsapp = document.getElementById("btnEnviarWhatsapp");
+    const avisoWhatsapp = document.getElementById("whatsAviso");
+    const inputNumero = document.getElementById("whatsNumero");
+
+    btnEnviarWhatsapp.addEventListener("click", () => {
+        avisoWhatsapp.style.display = "none";
+        const numero = (inputNumero.value || "").replace(/\\D/g, "");
+        if (!numero) {
+            avisoWhatsapp.textContent = "Informe o numero com DDI + DDD + numero (somente digitos).";
+            avisoWhatsapp.style.display = "block";
+            return;
+        }
+        if (!rotaWhatsappAtual) {
+            avisoWhatsapp.textContent = "Rota nao encontrada para este veiculo.";
+            avisoWhatsapp.style.display = "block";
+            return;
+        }
+        const urlMapa = buildGmapsUrl(rotaWhatsappAtual);
+        if (!urlMapa) {
+            avisoWhatsapp.textContent = "Rota sem coordenadas suficientes para gerar link.";
+            avisoWhatsapp.style.display = "block";
+            return;
+        }
+        const labelVeic = rotaWhatsappAtual.veiculo || "Rota";
+        const mensagem = `Rota planejada (${labelVeic})\\n${urlMapa}`;
+        const waUrl = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
+        window.open(waUrl, "_blank");
+        if (modalWhatsapp) modalWhatsapp.hide();
     });
 });
 </script>
