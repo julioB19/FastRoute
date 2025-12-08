@@ -83,6 +83,19 @@ def _peso_rota(ids_entregas: List[str], entregas_map: Dict[str, Entrega]) -> flo
     return sum(entregas_map[eid].peso for eid in ids_entregas)
 
 
+def _avaliar_rota_ids(
+    rota_ids: List[str],
+    matriz: List[List[float]],
+    entregas_map: Dict[str, Entrega],
+    deposito: int,
+) -> float:
+    """Calcula custo da rota (deposito -> pontos -> deposito) usando ids de entrega."""
+    if not rota_ids:
+        return 0.0
+    indices = [entregas_map[eid].indice_matriz for eid in rota_ids]
+    return _distancia_rota(indices, matriz, deposito)
+
+
 def _criar_solucao_inicial(entregas: List[Entrega], veiculos: List[Veiculo]) -> Dict[str, List[str]]:
     solucao = {v.id: [] for v in veiculos}
     pesos = {v.id: 0.0 for v in veiculos}
@@ -207,6 +220,62 @@ def _mutacao(
     return novo
 
 
+def _movimento_2opt_ids(rota_ids: List[str], i: int, j: int) -> List[str]:
+    """Aplica movimento 2-opt invertendo trecho (i+1..j) da rota."""
+    return rota_ids[: i + 1] + list(reversed(rota_ids[i + 1 : j + 1])) + rota_ids[j + 1 :]
+
+
+def _busca_local_2opt(
+    rota_ids: List[str],
+    matriz: List[List[float]],
+    entregas_map: Dict[str, Entrega],
+    deposito: int,
+) -> Tuple[List[str], float]:
+    """
+    Melhor vizinho com 2-opt dentro de uma rota (mantem veiculo/capacidade).
+    Retorna rota refinada e custo.
+    """
+    melhor_rota = rota_ids[:]
+    melhor_custo = _avaliar_rota_ids(melhor_rota, matriz, entregas_map, deposito)
+    n = len(melhor_rota)
+    if n < 3:
+        return melhor_rota, melhor_custo
+
+    while True:
+        melhor_iter = None
+        custo_iter = melhor_custo
+        for i in range(0, n - 2):
+            for j in range(i + 2, n):
+                candidata = _movimento_2opt_ids(melhor_rota, i, j)
+                custo = _avaliar_rota_ids(candidata, matriz, entregas_map, deposito)
+                if custo < custo_iter:
+                    melhor_iter = candidata
+                    custo_iter = custo
+        if melhor_iter is None:
+            break
+        melhor_rota = melhor_iter
+        melhor_custo = custo_iter
+    return melhor_rota, melhor_custo
+
+
+def _aplicar_busca_local_por_rota(
+    solucao: Dict[str, List[str]],
+    matriz: List[List[float]],
+    entregas_map: Dict[str, Entrega],
+    deposito: int,
+) -> Dict[str, List[str]]:
+    """
+    Refina a ordem interna das rotas com 2-opt (nao altera atribuicao de veiculo).
+    """
+    ajustada = {vid: rotas[:] for vid, rotas in solucao.items()}
+    for vid, rota_ids in ajustada.items():
+        if len(rota_ids) < 3:
+            continue
+        melhor, _ = _busca_local_2opt(rota_ids, matriz, entregas_map, deposito)
+        ajustada[vid] = melhor
+    return ajustada
+
+
 def _fitness(
     solucao: Dict[str, List[str]],
     matriz: List[List[float]],
@@ -244,6 +313,7 @@ def encontrar_melhor_rota_genetico(
     geracoes: int = 150,
     taxa_mutacao: float = 0.12,
     tamanho_torneio: int = 3,
+    usar_busca_local: bool = True,
 ) -> Dict[str, object]:
     """
     Minimiza a distancia percorrida usando algoritmo genetico.
@@ -265,7 +335,10 @@ def encontrar_melhor_rota_genetico(
 
     populacao = []
     for _ in range(tamanho_populacao):
-        populacao.append(_criar_solucao_inicial(entregas, veiculos))
+        inicial = _criar_solucao_inicial(entregas, veiculos)
+        if usar_busca_local:
+            inicial = _aplicar_busca_local_por_rota(inicial, matriz_distancias, entregas_map, deposito)
+        populacao.append(inicial)
 
     melhor_solucao = None
     melhor_custo = float("inf")
@@ -290,6 +363,8 @@ def encontrar_melhor_rota_genetico(
 
             filho = _crossover(pai, mae, entregas, veiculos)
             filho = _mutacao(filho, entregas_map, veiculos_map, taxa_mutacao)
+            if usar_busca_local:
+                filho = _aplicar_busca_local_por_rota(filho, matriz_distancias, entregas_map, deposito)
             nova_populacao.append(filho)
 
         populacao = nova_populacao
@@ -304,32 +379,3 @@ def encontrar_melhor_rota_genetico(
         "distancia_total_km": distancia_total,
         "custo_fitness": melhor_custo,
     }
-
-
-if __name__ == "__main__":
-    coordenadas_exemplo = [
-        (-27.358885, -53.398043),  # deposito (indice 0)
-        (-27.350000, -53.400000),
-        (-27.360000, -53.395000),
-        (-27.345000, -53.410000),
-    ]
-
-    matriz = gerar_matriz_distancias(coordenadas_exemplo)
-
-    veiculos_demo = [
-        Veiculo(id="ABC1234", limite_peso=123000.0, tipo_carga=1),
-        Veiculo(id="XYZ9999", limite_peso=80000.0, tipo_carga=2),
-    ]
-
-    entregas_demo = [
-        Entrega(id="PED01", peso=30000.0, tipo_carga=1, indice_matriz=1),
-        Entrega(id="PED02", peso=20000.0, tipo_carga=2, indice_matriz=2),
-        Entrega(id="PED03", peso=25000.0, tipo_carga=1, indice_matriz=3),
-    ]
-
-    resultado = encontrar_melhor_rota_genetico(
-        matriz, entregas_demo, veiculos_demo, deposito=0, geracoes=50, tamanho_populacao=30
-    )
-
-    print("Melhor rotas encontradas (demo):")
-    print(resultado)
