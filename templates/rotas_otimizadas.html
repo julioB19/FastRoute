@@ -664,8 +664,8 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
         const labelVeic = rotaWhatsappAtual.veiculo || "Rota";
-        const mensagem = `Rota planejada (${labelVeic})\\n${urlMapa}`;
-        const waUrl = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
+        const mensagem = encodeURIComponent(`Rota planejada (${labelVeic}): ${urlMapa}`);
+        const waUrl = `https://wa.me/${numero}?text=${mensagem}`;
         window.open(waUrl, "_blank");
         if (modalWhatsapp) modalWhatsapp.hide();
     });
