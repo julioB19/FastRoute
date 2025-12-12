@@ -320,7 +320,7 @@ class ServicoPedidosImportados:
         return [self._map_pedido(r) for r in rows]
 
     # -----------------------------------------------------
-    # OTIMIZA��O DE ROTAS
+    # OTIMIZAÇÃO DE ROTAS
     # -----------------------------------------------------
 
     def recuperar_ultima_otimizacao_salva(self, data_referencia: Optional[str] = None) -> Optional[Dict[str, Any]]:
@@ -483,6 +483,7 @@ class ServicoPedidosImportados:
     ):
         """
         Marca pedidos das rotas como ENTREGUE e registra rota/usuario.
+        Usa CURRENT_TIMESTAMP para gravar data/hora de entrega.
         """
         if not rotas_por_veiculo:
             return False, "Nenhuma rota calculada."
@@ -519,7 +520,7 @@ class ServicoPedidosImportados:
                                 UPDATE entrega
                                 SET status = %s,
                                     veiculo_placa = %s,
-                                    data_entrega = CURRENT_DATE
+                                    data_entrega = CURRENT_TIMESTAMP
                                 WHERE id_entrega = %s;
                                 """,
                                 ("ENTREGUE", veic, id_entrega),
@@ -530,7 +531,7 @@ class ServicoPedidosImportados:
                             cursor.execute(
                                 """
                                 INSERT INTO entrega (id_entrega, status, pedido_n_nota, veiculo_placa, data_entrega)
-                                VALUES (%s, %s, %s, %s, CURRENT_DATE);
+                                VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP);
                                 """,
                                 (id_entrega, "ENTREGUE", int(base_nota), veic),
                             )

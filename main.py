@@ -17,11 +17,11 @@ DEPOSITO_COORD = (-27.367681114267935, -53.40115242306388)
 
 # Config BG
 DB_USER = "postgres"
-DB_PASSWORD = "fastrout"
-#DB_PASSWORD = "1234"
+#DB_PASSWORD = "fastrout"
+DB_PASSWORD = "1234"
 DB_HOST = "localhost"
-DB_PORT = "3380"
-#DB_PORT = "5433"
+#DB_PORT = "3380"
+DB_PORT = "5433"
 DB_NAME = "FastRoute"
 
 config_banco = ConfiguracaoBanco(DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT)
@@ -101,12 +101,11 @@ def home():
     })
     total_incompletos = servico_pedidos.contar_incompletos()
 
-    # contar entregas no último mês - exemplo simples (você pode ajustar)
+    # contar entregas no último mês -> agora conta Nº DE PEDIDOS ENTREGUES (últimos 30 dias)
     entregas_ultimo_mes = 0
     try:
-        # consulta simples — pode ser trocada por método do serviço
         q = """
-            SELECT COUNT(DISTINCT DATE(e.data_entrega)) AS total
+            SELECT COUNT(*) AS total
             FROM ENTREGA e
             WHERE e.data_entrega >= (CURRENT_DATE - INTERVAL '30 days');
         """
@@ -701,7 +700,8 @@ def entregas_mapa():
     """
     Retorna marcadores agregados por coordenadas.
     Se existir pelo menos uma entrega (entregue=True) para uma coordenada,
-    o status daquela coordenada será 'ENTREGUE'. Caso contrário 'COMPLETO'.
+    o status daquela coordenada será 'ENTREGUE'. Caso contrário 'COMPLETO'
+    (OBS: o JS filtra para mostrar apenas não-entregues).
     """
     query = """
         SELECT
@@ -762,29 +762,41 @@ def entregas_mapa():
 @login_obrigatorio
 def entregas_datas():
     """
-    Retorna lista distinta de datas em que ocorreram entregas
-    no formato YYYY-MM-DD, para o calendário marcar.
+    Retorna lista de dias (YYYY-MM-DD) e contagem de pedidos entregues
+    para o mês/ano solicitado: /entregas-datas?ano=2025&mes=12
+    Se ano/mes não informados, retorna todas as datas.
     """
-    query = """
-        SELECT DISTINCT DATE(e.data_entrega) AS data_entrega
+    ano = request.args.get("ano", type=int)
+    mes = request.args.get("mes", type=int)
+
+    params = []
+    extra_where = ""
+    if ano and mes:
+        extra_where = "AND EXTRACT(YEAR FROM e.data_entrega) = %s AND EXTRACT(MONTH FROM e.data_entrega) = %s"
+        params.extend([ano, mes])
+
+    query = f"""
+        SELECT DATE(e.data_entrega) AS dia, COUNT(*) AS total
         FROM ENTREGA e
         WHERE e.data_entrega IS NOT NULL
-        ORDER BY data_entrega;
+        {extra_where}
+        GROUP BY DATE(e.data_entrega)
+        ORDER BY DATE(e.data_entrega);
     """
 
-    rows = servico_pedidos._execute_select(query)
+    rows = servico_pedidos._execute_select(query, tuple(params))
 
-    datas = []
+    result = []
     for r in rows:
-        # r["data_entrega"] pode ser datetime.date/datetime
-        dt = r.get("data_entrega")
+        dt = r.get("dia")
+        cnt = int(r.get("total") or 0)
         try:
-            datas.append({"start": dt.strftime("%Y-%m-%d")})
+            date_str = dt.strftime("%Y-%m-%d")
         except Exception:
-            # se já for string
-            datas.append({"start": str(dt)})
+            date_str = str(dt)
+        result.append({"date": date_str, "count": cnt})
 
-    return jsonify(datas)
+    return jsonify(result)
 
 
 # -----------------------------

@@ -17,7 +17,7 @@ const pinAzul = L.icon({
 });
 
 // ======================
-//  CALENDÁRIO ULTRA-COMPACTO — CORRIGIDO
+//  CALENDÁRIO ULTRA-COMPACTO
 // ======================
 
 (function () {
@@ -34,6 +34,13 @@ const pinAzul = L.icon({
         );
     }
 
+    /**
+     * renderMiniCompactCalendar
+     * @param {HTMLElement} container
+     * @param {number} year  - full year (ex: 2025)
+     * @param {number} month - 0-11 (JS)
+     * @param {Date[]|null} eventDates - array de objetos Date (já convertidos)
+     */
     function renderMiniCompactCalendar(container, year, month, eventDates) {
         container.innerHTML = '';
 
@@ -52,7 +59,7 @@ const pinAzul = L.icon({
         const title = document.createElement('div');
         title.style.flex = '1';
         title.style.textAlign = 'center';
-        title.innerText = formatMonthName(new Date(year, month, 1)); // <- corrigido
+        title.innerText = formatMonthName(new Date(year, month, 1));
 
         header.appendChild(prevBtn);
         header.appendChild(title);
@@ -70,25 +77,18 @@ const pinAzul = L.icon({
             grid.appendChild(w);
         });
 
-        const firstDay = new Date(year, month, 1).getDay(); // <- corrigido
-        const daysInMonth = new Date(year, month + 1, 0).getDate(); // <- corrigido
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
 
         const today = new Date();
         const todayLocal = new Date(
             today.getFullYear(),
             today.getMonth(),
             today.getDate()
-        ); // <- corrigido
+        );
 
-        // converter datas de eventos
-        const eventsDatesLocal = (eventDates || []).map(ed => {
-            try {
-                const d = new Date(ed);
-                return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-            } catch (e) {
-                return null;
-            }
-        }).filter(Boolean);
+        // eventDates já deve ser um array de Date (ou vazio)
+        const eventsDatesLocal = Array.isArray(eventDates) ? eventDates : [];
 
         for (let i = 0; i < firstDay; i++) {
             const emptyCell = document.createElement('div');
@@ -100,19 +100,17 @@ const pinAzul = L.icon({
             const cell = document.createElement('div');
             cell.className = 'mc-day';
 
-            const date = new Date(year, month, d); // <- corrigido
+            const date = new Date(year, month, d);
 
             const num = document.createElement('div');
             num.className = 'mc-num';
             num.innerText = d;
 
-            if (sameDate(date, todayLocal))
-                cell.classList.add('today');
+            if (sameDate(date, todayLocal)) cell.classList.add('today');
 
             const hasEvent = eventsDatesLocal.some(ed => sameDate(ed, date));
             if (hasEvent) {
                 cell.classList.add("entrega");
-
                 const dot = document.createElement('div');
                 dot.className = 'mc-dot';
                 cell.appendChild(dot);
@@ -135,21 +133,33 @@ const pinAzul = L.icon({
         });
     }
 
+    /**
+     * fetchEventsAndRender - busca somente o mês/ano solicitado
+     * espera do backend um array de strings "YYYY-MM-DD" ou objetos {date: "YYYY-MM-DD", count: n}
+     */
     function fetchEventsAndRender(container, year, month) {
-        fetch('/entregas-datas')
+        const realMonth = month + 1; // backend espera 1-12
+
+        fetch(`/entregas-datas?ano=${year}&mes=${realMonth}`)
             .then(res => {
                 if (!res.ok) throw new Error('Erro ao buscar datas');
                 return res.json();
             })
             .then(events => {
-                const eventDates = (events || []).map(e => {
-                    if (typeof e === "string") return e;
-                    if (e && e.start) return e.start;
-                    if (e && e.data) return e.data;
-                    return null;
+                // events: ["YYYY-MM-DD", ...] ou [{date: "YYYY-MM-DD", count: N}, ...]
+                const cleanDates = (events || []).map(e => {
+                    const raw = (typeof e === 'string') ? e : (e.date || e.start || e.data || '');
+                    if (!raw) return null;
+
+                    // usar apenas a parte YYYY-MM-DD (antes do 'T' se houver timestamp)
+                    const datePart = raw.split('T')[0];
+                    const parts = datePart.split('-').map(Number);
+                    if (parts.length !== 3) return null;
+                    const [y, m, d] = parts;
+                    return new Date(y, m - 1, d); // cria data no horário local sem timezone
                 }).filter(Boolean);
 
-                renderMiniCompactCalendar(container, year, month, eventDates);
+                renderMiniCompactCalendar(container, year, month, cleanDates);
             })
             .catch(err => {
                 console.error('Erro ao buscar eventos', err);
@@ -171,7 +181,7 @@ const pinAzul = L.icon({
 })();
 
 // ======================
-//  MINI MAPA LEAFLET
+//  MINI MAPA LEAFLET — SOMENTE NÃO ENTREGUES
 // ======================
 
 document.addEventListener("DOMContentLoaded", function () {
@@ -187,39 +197,42 @@ document.addEventListener("DOMContentLoaded", function () {
         }).addTo(map);
 
         fetch('/entregas-mapa')
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) throw new Error('Erro ao buscar marcadores');
+                return res.json();
+            })
             .then(marcadores => {
                 const bounds = [];
 
-                marcadores.forEach(m => {
-                    if (!m.lat || !m.lng) return;
+                (marcadores || [])
+                    .filter(m => (m.status || "").toUpperCase() !== "ENTREGUE") // APENAS NÃO ENTREGUES
+                    .forEach(m => {
 
-                    const status = (m.status || "").toUpperCase();
-                    const icone = status === "ENTREGUE" ? pinAzul : pinVerde;
+                        if (!m.lat || !m.lng) return;
 
-                    const marker = L.marker([m.lat, m.lng], { icon: icone }).addTo(map);
+                        const marker = L.marker([m.lat, m.lng], { icon: pinVerde }).addTo(map);
 
-                    if (status === "ENTREGUE" && typeof marker.bringToFront === "function") {
-                        marker.bringToFront();
-                    } else if (status === "ENTREGUE" && marker.setZIndexOffset) {
-                        marker.setZIndexOffset(1000);
-                    }
+                        let notas = Array.isArray(m.n_notas)
+                            ? m.n_notas.join(", ")
+                            : (m.n_notas || m.n_nota || "");
 
-                    let notas = Array.isArray(m.n_notas) ? m.n_notas.join(", ") : (m.n_notas || m.n_nota || "");
-                    marker.bindPopup(`Pedidos: ${notas}<br>Status: ${status}`);
+                        marker.bindPopup(`Pedidos: ${notas}<br>Status: ${m.status}`);
 
-                    bounds.push([m.lat, m.lng]);
-                });
+                        bounds.push([m.lat, m.lng]);
+                    });
 
                 if (bounds.length > 0) {
                     map.fitBounds(bounds, { padding: [30, 30] });
                 }
+            })
+            .catch(err => {
+                console.error('Erro ao buscar marcadores', err);
             });
     }
 });
 
 // ======================
-//  MAPA EXPANDIDO
+//  MAPA EXPANDIDO — APENAS NÃO ENTREGUES + FILTROS REMOVIDOS
 // ======================
 
 document.addEventListener("DOMContentLoaded", function () {
@@ -228,19 +241,14 @@ document.addEventListener("DOMContentLoaded", function () {
     const overlay = document.getElementById("overlayMapa");
     const fechar = document.getElementById("fecharOverlayMapa");
 
-    const filtroTodos = document.getElementById("filtroTodos");
-    const filtroCompletos = document.getElementById("filtroCompletos");
-    const filtroEntregues = document.getElementById("filtroEntregues");
+    // Ocultar barra de filtros (se existir)
+    const barraFiltros = document.querySelector(".filtro-mapa-bar");
+    if (barraFiltros) barraFiltros.style.display = "none";
 
     let mapaExpandido = null;
     let marcadoresLayer = null;
 
-    function ativarBotao(btn) {
-        document.querySelectorAll(".filtro-btn").forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
-    }
-
-    function carregarMarcadores(filtro = "TODOS") {
+    function carregarMarcadores() {
 
         if (!mapaExpandido) return;
 
@@ -251,37 +259,36 @@ document.addEventListener("DOMContentLoaded", function () {
         marcadoresLayer = L.layerGroup().addTo(mapaExpandido);
 
         fetch('/entregas-mapa')
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) throw new Error('Erro ao buscar marcadores');
+                return res.json();
+            })
             .then(marcadores => {
                 const bounds = [];
 
-                marcadores.forEach(m => {
-                    if (!m.lat || !m.lng) return;
+                (marcadores || [])
+                    .filter(m => (m.status || "").toUpperCase() !== "ENTREGUE") // APENAS NÃO ENTREGUES
+                    .forEach(m => {
 
-                    const status = (m.status || "").toUpperCase();
+                        if (!m.lat || !m.lng) return;
 
-                    if (filtro === "COMPLETOS" && status !== "COMPLETO") return;
-                    if (filtro === "ENTREGUES" && status !== "ENTREGUE") return;
+                        const marker = L.marker([m.lat, m.lng], { icon: pinVerde }).addTo(marcadoresLayer);
 
-                    const icone = status === "ENTREGUE" ? pinAzul : pinVerde;
+                        let notas = Array.isArray(m.n_notas)
+                            ? m.n_notas.join(", ")
+                            : (m.n_notas || m.n_nota || "");
 
-                    const marker = L.marker([m.lat, m.lng], { icon: icone }).addTo(marcadoresLayer);
+                        marker.bindPopup(`Pedidos: ${notas}<br>Status: ${m.status}`);
 
-                    if (status === "ENTREGUE" && typeof marker.bringToFront === "function") {
-                        marker.bringToFront();
-                    } else if (status === "ENTREGUE" && marker.setZIndexOffset) {
-                        marker.setZIndexOffset(1000);
-                    }
-
-                    let notas = Array.isArray(m.n_notas) ? m.n_notas.join(", ") : (m.n_notas || m.n_nota || "");
-                    marker.bindPopup(`Pedidos: ${notas}<br>Status: ${status}`);
-
-                    bounds.push([m.lat, m.lng]);
-                });
+                        bounds.push([m.lat, m.lng]);
+                    });
 
                 if (bounds.length > 0) {
                     mapaExpandido.fitBounds(bounds, { padding: [30, 30] });
                 }
+            })
+            .catch(err => {
+                console.error('Erro ao buscar marcadores (mapa expandido)', err);
             });
     }
 
@@ -296,8 +303,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     maxZoom: 19
                 }).addTo(mapaExpandido);
 
-                ativarBotao(filtroTodos);
-                carregarMarcadores("TODOS");
+                carregarMarcadores();
             } else {
                 mapaExpandido.invalidateSize();
             }
@@ -306,20 +312,5 @@ document.addEventListener("DOMContentLoaded", function () {
 
     fechar.addEventListener("click", () => {
         overlay.style.display = "none";
-    });
-
-    filtroTodos.addEventListener("click", () => {
-        ativarBotao(filtroTodos);
-        carregarMarcadores("TODOS");
-    });
-
-    filtroCompletos.addEventListener("click", () => {
-        ativarBotao(filtroCompletos);
-        carregarMarcadores("COMPLETOS");
-    });
-
-    filtroEntregues.addEventListener("click", () => {
-        ativarBotao(filtroEntregues);
-        carregarMarcadores("ENTREGUES");
     });
 });
