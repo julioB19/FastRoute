@@ -13,17 +13,18 @@
     </div>
 
     <!-- FILTROS -->
-    <form method="get" action="{{ url_for('pedidos_importados') }}" class="row g-3 mb-3 text-white">
+    <form method="get" action="{{ url_for('pedidos_importados') }}"
+          class="row g-3 mb-3 text-white align-items-end">
 
-        <div class="col-12 mb-1 d-flex justify-content-between align-items-center">
-            <span class="text-white" style="font-weight: 600; font-size: 16px;">
-                Total: {{ total_registros }}
+        <div class="col-12 d-flex justify-content-between align-items-center">
+            <span style="font-weight: 600; font-size: 16px;">
+                Total de Pedidos Encontrados: {{ total_registros }}
             </span>
         </div>
 
-        <!-- Filtro padrão -->
-        <div class="col-md-3">
-            <label class="form-label text-white">Filtro</label>
+        <!-- Linha de filtros -->
+        <div class="col-auto">
+            <label class="form-label">Status</label>
             <select class="form-select" name="filtro">
                 <option value="todos" {% if filtro == 'todos' %}selected{% endif %}>Todos</option>
                 <option value="completos" {% if filtro == 'completos' %}selected{% endif %}>Completos</option>
@@ -32,13 +33,45 @@
             </select>
         </div>
 
-        <div class="col-md-3">
-            <label class="form-label text-white">Data da Nota</label>
-            <input type="date" class="form-control" name="data_nota" value="{{ data_nota }}">
+        <div class="col-auto">
+            <label class="form-label">Nome do Cliente</label>
+            <input type="text" class="form-control" name="nome_cliente"
+                   placeholder="Parte do nome"
+                   value="{{ request.args.get('nome_cliente','') }}">
         </div>
 
-        <div class="col-md-2">
-            <label class="form-label text-white">Itens por página</label>
+        <div class="col-auto">
+            <label class="form-label">Endereço</label>
+            <input type="text" class="form-control" name="endereco"
+                   value="{{ request.args.get('endereco','') }}">
+        </div>
+
+        <div class="col-auto">
+            <label class="form-label">Cidade</label>
+            <input type="text" class="form-control" name="cidade"
+                   value="{{ request.args.get('cidade','') }}">
+        </div>
+
+        <div class="col-auto">
+            <label class="form-label">Número da Nota</label>
+            <input type="number" class="form-control" name="numero_nota"
+                   value="{{ request.args.get('numero_nota','') }}">
+        </div>
+
+        <div class="col-auto">
+            <label class="form-label">Data da Nota</label>
+            <input type="date" class="form-control" name="data_nota"
+                   value="{{ request.args.get('data_nota','') }}">
+        </div>
+
+        <div class="col-auto">
+            <label class="form-label">Data da Entrega</label>
+            <input type="date" class="form-control" name="data_entrega"
+                   value="{{ request.args.get('data_entrega','') }}">
+        </div>
+
+        <div class="col-auto">
+            <label class="form-label">Pedidos por Página</label>
             <select class="form-select" name="itens" onchange="this.form.submit()">
                 <option value="20" {% if itens_por_pagina == 20 %}selected{% endif %}>20</option>
                 <option value="50" {% if itens_por_pagina == 50 %}selected{% endif %}>50</option>
@@ -46,50 +79,12 @@
             </select>
         </div>
 
-        <!-- BOTÕES -->
-        <div class="col-md-4 d-flex align-items-end">
+        <!-- BOTÕES À DIREITA -->
+        <div class="col ms-auto d-flex justify-content-end gap-2">
             <button class="btn btn-cotri">Aplicar</button>
-
-            <a href="{{ url_for('pedidos_importados') }}" class="btn btn-outline-light ms-2">
+            <a href="{{ url_for('pedidos_importados') }}" class="btn btn-outline-light">
                 Limpar
             </a>
-        </div>
-
-        <!-- ========================= -->
-        <!-- BLOCOS DE FILTROS EXTRAS -->
-        <!-- ========================= -->
-        <div id="filtrosExtras" style="display:none;">
-
-            <div class="col-md-3 mt-2">
-                <label class="form-label text-white">Cliente</label>
-                <select class="form-select" name="cliente_id">
-                    <option value="">Todos</option>
-                    {% for c in clientes %}
-                        <option value="{{ c.id }}">{{ c.nome }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="col-md-3 mt-2">
-                <label class="form-label text-white">Endereço</label>
-                <input type="text" class="form-control" name="endereco" placeholder="Digite o endereço">
-            </div>
-
-            <div class="col-md-3 mt-2">
-                <label class="form-label text-white">Cidade</label>
-                <input type="text" class="form-control" name="cidade" placeholder="Digite a cidade">
-            </div>
-
-            <div class="col-md-3 mt-2">
-                <label class="form-label text-white">Data da Entrega</label>
-                <input type="date" class="form-control" name="data_entrega">
-            </div>
-
-            <div class="col-md-3 mt-2">
-                <label class="form-label text-white">Número da Nota</label>
-                <input type="number" class="form-control" name="numero_nota" placeholder="Ex: 150234">
-            </div>
-
         </div>
 
     </form>
@@ -119,7 +114,6 @@
                                     <td>{{ p.cliente }}</td>
                                     <td>{{ p.endereco }}</td>
                                     <td>{{ p.data_nota | data_br }}</td>
-
                                     <td>
                                         {% if p.status == 'COMPLETO' %}
                                             <span class="badge bg-success">Completo</span>
@@ -131,31 +125,28 @@
                                             <span class="badge bg-secondary">-</span>
                                         {% endif %}
                                     </td>
-
                                     <td>
                                         <button type="button"
-                                            onclick="abrirDetalhes('{{ p.id }}')"
-                                            class="btn btn-sm btn-warning text-dark">
+                                                onclick="abrirDetalhes('{{ p.id }}')"
+                                                class="btn btn-sm btn-warning text-dark">
                                             Detalhes
                                         </button>
                                     </td>
-
                                 </tr>
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="6" class="text-center py-4">Nenhum pedido encontrado.</td>
+                                <td colspan="6" class="text-center py-4">
+                                    Nenhum pedido encontrado.
+                                </td>
                             </tr>
                         {% endif %}
                     </tbody>
                 </table>
 
-                <!-- PAGINAÇÃO -->
                 {% if total_paginas > 1 %}
                 <nav class="mt-3">
-
                     <ul class="pagination justify-content-center pagination-cotri">
-
                         {% set args_base = request.args.to_dict() %}
                         {% set _ = args_base.pop('pagina', None) %}
 
@@ -178,15 +169,7 @@
                                 Próxima »
                             </a>
                         </li>
-
                     </ul>
-
-                    <div class="text-center">
-                        <a class="btn btn-outline-cotri mt-2"
-                           href="{{ url_for('pedidos_importados', pagina=total_paginas, **args_base) }}">
-                            Ir para última página ({{ total_paginas }})
-                        </a>
-                    </div>
                 </nav>
                 {% endif %}
 
@@ -199,155 +182,17 @@
 <div class="modal fade" id="modalDetalhesPedido" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
-
-        <div class="modal-header bg-warning">
-            <h5 class="modal-title">Detalhes do Pedido</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-
-        <div class="modal-body" id="conteudo-detalhes">
-            Carregando...
-        </div>
-
-        <div class="modal-footer">
-            <button class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-        </div>
-
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title">Detalhes do Pedido</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="conteudo-detalhes">Carregando...</div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
         </div>
     </div>
 </div>
 
-<script>
-window.abrirDetalhes = async function(nnota) {
-    const modal = new bootstrap.Modal('#modalDetalhesPedido');
-    const conteudo = document.getElementById("conteudo-detalhes");
-    conteudo.innerHTML = "Carregando...";
-
-    try {
-        const resp = await fetch(`/detalhar_pedido/${nnota}`);
-        const dados = await resp.json();
-
-        let html = `
-            <h5>Pedido nº ${dados.pedido.n_nota}</h5>
-            <p><strong>Cliente:</strong> ${dados.pedido.nome_cliente || '-'}</p>
-            <hr />
-            <h6>Itens</h6>
-            <table class="table table-sm">
-                <thead>
-                    <tr>
-                        <th>Produto</th>
-                        <th>Classificação</th>
-                        <th>Qtd</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
-
-        for (const it of dados.itens) {
-
-            const cls = it.classificacao == 2
-                ? "<span class='badge bg-danger'>Agrotóxico</span>"
-                : "<span class='badge bg-success'>Normal</span>";
-
-            html += `
-                <tr>
-                    <td>${it.nome_produto}</td>
-                    <td>${cls}</td>
-                    <td>${it.quant_pedido}</td>
-                </tr>
-            `;
-        }
-
-        html += "</tbody></table>";
-        conteudo.innerHTML = html;
-        modal.show();
-
-    } catch (e) {
-        conteudo.innerHTML = "<span class='text-danger'>Erro ao carregar.</span>";
-        modal.show();
-    }
-};
-
-document.addEventListener("DOMContentLoaded", () => {
-    const btnOtimizar = document.getElementById("btnOtimizarRotas");
-    if (!btnOtimizar) {
-        return;
-    }
-
-    btnOtimizar.addEventListener("click", async () => {
-        const linhas = Array.from(document.querySelectorAll("table tbody tr[data-pedido-id]"));
-        const pedidosIds = linhas
-            .map((linha) => ({
-                id: linha.dataset.pedidoId,
-                coords: linha.dataset.coords,
-            }))
-            .filter((item) => item.coords && item.coords.trim() !== "")
-            .map((item) => parseInt(item.id, 10))
-            .filter((id) => Number.isFinite(id));
-
-        if (pedidosIds.length === 0) {
-            alert("Nenhum pedido com coordenadas para otimizar.");
-            return;
-        }
-
-        const depositoInput = prompt("Informe as coordenadas do deposito (lat,lng):");
-        if (!depositoInput) {
-            return;
-        }
-
-        const [latStr, lngStr] = depositoInput.split(",").map((v) => v.trim());
-        const depositoLat = parseFloat(latStr);
-        const depositoLng = parseFloat(lngStr);
-        if (!Number.isFinite(depositoLat) || !Number.isFinite(depositoLng)) {
-            alert("Coordenadas do deposito invalidas.");
-            return;
-        }
-
-        const textoOriginal = btnOtimizar.innerText;
-        btnOtimizar.disabled = true;
-        btnOtimizar.innerText = "Otimizando...";
-
-        try {
-            const resp = await fetch("/otimizar_rotas", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    pedido_ids: pedidosIds,
-                    deposito: { lat: depositoLat, lng: depositoLng },
-                }),
-            });
-
-            const resultado = await resp.json();
-            if (!resp.ok) {
-                alert(resultado.erro || "Erro ao otimizar rotas.");
-                return;
-            }
-
-            const rotas = resultado.rotas_por_veiculo || {};
-            const resumoRotas = Object.entries(rotas)
-                .map(([veiculo, entregas]) => `${veiculo}: ${entregas && entregas.length ? entregas.join(" -> ") : "Sem entregas"}`)
-                .join("\\n");
-            const distancia = resultado.distancia_total_km
-                ? Number.parseFloat(resultado.distancia_total_km).toFixed(2)
-                : "0.00";
-
-            alert(`Distancia total estimada: ${distancia} km\\n\\nRotas:\\n${resumoRotas}`);
-            console.log("Resultado da otimizacao", resultado);
-        } catch (err) {
-            console.error(err);
-            alert("Falha ao comunicar com o otimizador de rotas.");
-        } finally {
-            btnOtimizar.disabled = false;
-            btnOtimizar.innerText = textoOriginal;
-        }
-    });
-});
-function toggleFiltros() {
-    const bloco = document.getElementById("filtrosExtras");
-    bloco.style.display = bloco.style.display === "none" ? "flex" : "none";
-}
-</script>
-
 <script src="{{ url_for('static', filename='js/pedidos_importados.js') }}"></script>
-
 {% endblock %}

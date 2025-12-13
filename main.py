@@ -310,10 +310,38 @@ def pedidos_importados():
         itens_por_pagina = 20
 
     filtros = {}
-    cliente_id = request.args.get('cliente_id')
-    if cliente_id:
-        filtros["cliente_id"] = cliente_id
 
+    # --------------------
+    # FILTROS PRINCIPAIS
+    # --------------------
+    nome_cliente = request.args.get('nome_cliente', '').strip()
+    if nome_cliente:
+        filtros["nome_cliente"] = nome_cliente
+
+    # Cidade (LIKE)
+    cidade = request.args.get('cidade', '').strip()
+    if cidade:
+        filtros["cidade"] = cidade
+
+    # Endereço (LIKE)
+    endereco = request.args.get('endereco', '').strip()
+    if endereco:
+        filtros["endereco"] = endereco
+
+    # Data da entrega
+    data_entrega = request.args.get('data_entrega', '').strip()
+    if data_entrega:
+        filtros["data_entrega"] = data_entrega
+
+    # Número da nota (⚠ nome corrigido)
+    numero_nota = request.args.get('numero_nota', '').strip()
+    if numero_nota:
+        filtros["numero_nota"] = numero_nota
+
+
+    # --------------------
+    # FILTROS DE STATUS
+    # --------------------
     if filtro == "completos":
         filtros["coords_not_null"] = True
         filtros["excluir_entregues"] = True
@@ -322,6 +350,9 @@ def pedidos_importados():
     elif filtro == "entregues":
         filtros["entregues"] = True
 
+    # --------------------
+    # DATA DA NOTA
+    # --------------------
     if data_nota:
         filtros["data_inicio"] = data_nota
         filtros["data_fim"] = data_nota
@@ -331,27 +362,20 @@ def pedidos_importados():
     pag = servico_pedidos.listar_pedidos(pagina, filtros)
     clientes = servico_pedidos.buscar_clientes()
 
-    try:
-        return render_template(
-            'pedidos_importados.html',
-            usuario=session.get('usuario_nome'),
-            cargo=session.get('usuario_cargo'),
-            pedidos=pag["pedidos"],
-            pagina=pag["pagina"],
-            total_paginas=pag["total_paginas"],
-            total_registros=pag["total_registros"],
-            clientes=clientes,
-            filtro=filtro,
-            data_nota=data_nota,
-            itens_por_pagina=itens_por_pagina,
-        )
-    except TemplateNotFound:
-        return render_template(
-            'home.html',
-            usuario=session.get('usuario_nome'),
-            pedidos=pag["pedidos"],
-            clientes=clientes,
-        )
+    return render_template(
+        'pedidos_importados.html',
+        usuario=session.get('usuario_nome'),
+        cargo=session.get('usuario_cargo'),
+        pedidos=pag["pedidos"],
+        pagina=pag["pagina"],
+        total_paginas=pag["total_paginas"],
+        total_registros=pag["total_registros"],
+        clientes=clientes,
+        filtro=filtro,
+        data_nota=data_nota,
+        itens_por_pagina=itens_por_pagina,
+    )
+
 
 
 @app.route("/detalhar_pedido/<int:n_nota>")
