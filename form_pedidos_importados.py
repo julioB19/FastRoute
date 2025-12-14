@@ -81,6 +81,22 @@ class ServicoPedidosImportados:
             where_parts.append("p.id_cliente = %s")
             params.append(int(filtros["cliente_id"]))
 
+        if filtros.get("endereco"):
+            where_parts.append("""
+                LOWER(
+                    COALESCE(ec.endereco,'') || ' ' ||
+                    COALESCE(ec.numero,'')   || ' ' ||
+                    COALESCE(ec.bairro,'')   || ' ' ||
+                    COALESCE(ec.cidade,'')
+                ) LIKE %s
+            """)
+            params.append(f"%{filtros['endereco'].lower()}%")
+
+        if filtros.get("numero_nota"):
+            where_parts.append("CAST(p.n_nota AS TEXT) LIKE %s")
+            params.append(f"%{filtros['numero_nota']}%")
+
+
         if filtros.get("data_inicio"):
             where_parts.append("p.dt_nota >= %s")
             params.append(filtros["data_inicio"])
@@ -99,6 +115,25 @@ class ServicoPedidosImportados:
             where_parts.append(
                 "EXISTS (SELECT 1 FROM ENTREGA e WHERE e.pedido_n_nota = p.n_nota)"
             )
+        
+        if filtros.get("nome_cliente"):
+            where_parts.append("LOWER(c.nome_cliente) LIKE %s")
+            params.append(f"%{filtros['nome_cliente'].lower()}%")
+
+        if filtros.get("cidade"):
+            where_parts.append("LOWER(ec.cidade) LIKE %s")
+            params.append(f"%{filtros['cidade'].lower()}%")
+
+        if filtros.get("data_entrega"):
+            where_parts.append("""
+                EXISTS (
+                    SELECT 1 
+                    FROM ENTREGA e 
+                    WHERE e.pedido_n_nota = p.n_nota
+                    AND DATE(e.data_entrega) = %s
+                )
+            """)
+            params.append(filtros["data_entrega"])
 
         if filtros.get("excluir_entregues"):
             where_parts.append(
@@ -158,9 +193,11 @@ class ServicoPedidosImportados:
         query = f"""
             SELECT COUNT(*) AS total
             FROM PEDIDO p
+            LEFT JOIN CLIENTE c ON c.id_cliente = p.id_cliente
             LEFT JOIN ENDERECO_CLIENTE ec ON ec.id_endereco = p.id_endereco
             {where_sql};
         """
+
         rows = self._execute_select(query, tuple(params))
         return int(rows[0]["total"]) if rows else 0
 
@@ -268,9 +305,11 @@ class ServicoPedidosImportados:
         sql = f"""
             SELECT COUNT(*) AS total
             FROM PEDIDO p
+            LEFT JOIN CLIENTE c ON c.id_cliente = p.id_cliente
             LEFT JOIN ENDERECO_CLIENTE ec ON ec.id_endereco = p.id_endereco
             {where_sql};
         """
+
 
         rows = self._execute_select(sql, tuple(params))
         return rows[0]["total"] if rows else 0
@@ -320,7 +359,7 @@ class ServicoPedidosImportados:
         return [self._map_pedido(r) for r in rows]
 
     # -----------------------------------------------------
-    # OTIMIZA��O DE ROTAS
+    # OTIMIZAÇÃO DE ROTAS
     # -----------------------------------------------------
 
     def recuperar_ultima_otimizacao_salva(self, data_referencia: Optional[str] = None) -> Optional[Dict[str, Any]]:
@@ -483,6 +522,7 @@ class ServicoPedidosImportados:
     ):
         """
         Marca pedidos das rotas como ENTREGUE e registra rota/usuario.
+        Usa CURRENT_TIMESTAMP para gravar data/hora de entrega.
         """
         if not rotas_por_veiculo:
             return False, "Nenhuma rota calculada."
@@ -519,7 +559,7 @@ class ServicoPedidosImportados:
                                 UPDATE entrega
                                 SET status = %s,
                                     veiculo_placa = %s,
-                                    data_entrega = CURRENT_DATE
+                                    data_entrega = CURRENT_TIMESTAMP
                                 WHERE id_entrega = %s;
                                 """,
                                 ("ENTREGUE", veic, id_entrega),
@@ -530,7 +570,7 @@ class ServicoPedidosImportados:
                             cursor.execute(
                                 """
                                 INSERT INTO entrega (id_entrega, status, pedido_n_nota, veiculo_placa, data_entrega)
-                                VALUES (%s, %s, %s, %s, CURRENT_DATE);
+                                VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP);
                                 """,
                                 (id_entrega, "ENTREGUE", int(base_nota), veic),
                             )
