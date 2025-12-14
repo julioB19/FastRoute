@@ -393,6 +393,7 @@ def pagina_otimizacao_rotas():
 @login_obrigatorio
 def rotas_otimizadas():
     data_filtro = (request.args.get("data") or "").strip()
+    origem_param = (request.args.get("origem") or "").strip().lower()
     origem_resultado = "banco"
 
     def carregar_otimizacao(data_ref=None):
@@ -402,9 +403,21 @@ def rotas_otimizadas():
             print("Nao foi possivel recuperar otimizacoes do banco:", e)
             return None
 
-    dados = carregar_otimizacao(data_filtro) if data_filtro else carregar_otimizacao()
+    dados = None
+    if origem_param == "sessao":
+        dados = session.get("ultima_otimizacao")
+        if dados:
+            origem_resultado = "sessao"
+
+    if dados is None:
+        dados = carregar_otimizacao(data_filtro) if data_filtro else carregar_otimizacao()
+        if dados:
+            origem_resultado = "banco"
+
     if not dados:
-        dados = {}
+        dados = session.get("ultima_otimizacao") or {}
+        if dados:
+            origem_resultado = "sessao"
 
     rotas = dados.get("rotas_por_veiculo", {})
     distancia = dados.get("distancia_total_km", 0.0)
@@ -594,16 +607,6 @@ def otimizar_rotas():
         resultado = servico_pedidos.otimizar_rotas(
             pedido_ids, deposito_tuple, parametros_algoritmo
         )
-        # registra entregas/rotas como concluidas
-        try:
-            ok_reg, erro_reg = servico_pedidos.registrar_entregas_otimizadas(
-                resultado.get("rotas_por_veiculo", {}),
-                session.get("usuario_id"),
-            )
-            if not ok_reg:
-                print("Falha ao registrar entregas otimizadas:", erro_reg)
-        except Exception as e:
-            print("Erro inesperado ao registrar entregas otimizadas:", e)
 
         # guarda resultado na sessao para consulta posterior
         try:
@@ -631,6 +634,7 @@ def otimizar_rotas():
                 "data_referencia": datetime.date.today().isoformat(),
             }
             session["ultima_otimizacao"] = serializado
+            resultado["clientes_por_pedido"] = clientes_por_pedido
         except Exception as e:
             print("Nao foi possivel armazenar resultado de otimizacao na sessao:", e)
         return jsonify(resultado)
@@ -639,6 +643,55 @@ def otimizar_rotas():
     except Exception as e:
         print("Erro ao otimizar rotas:", e)
         return jsonify({"erro": "Falha interna ao otimizar rotas."}), 500
+
+
+@app.route("/salvar_rotas_otimizadas", methods=["POST"])
+@login_obrigatorio
+def salvar_rotas_otimizadas():
+    try:
+        dados = session.get("ultima_otimizacao") or {}
+        rotas = dados.get("rotas_por_veiculo") if isinstance(dados, dict) else None
+        if not rotas:
+            return jsonify({"erro": "Nenhuma otimizacao recente para salvar."}), 400
+
+        usuario_id = session.get("usuario_id")
+        ok_reg, erro_reg = servico_pedidos.registrar_entregas_otimizadas(
+            rotas,
+            usuario_id,
+        )
+        if not ok_reg:
+            return jsonify({"erro": erro_reg or "Nao foi possivel salvar as rotas."}), 400
+
+        try:
+            servico_pedidos.registrar_metricas_usuario_rotas(usuario_id, rotas_aceitas=1, rotas_recusadas=0)
+        except Exception as e:
+            print("Falha ao registrar metricas de rotas aceitas:", e)
+
+        return jsonify({"ok": True})
+    except Exception as e:
+        print("Erro ao salvar rotas otimizadas:", e)
+        return jsonify({"erro": "Falha interna ao salvar rotas."}), 500
+
+
+@app.route("/descartar_otimizacao", methods=["POST"])
+@login_obrigatorio
+def descartar_otimizacao():
+    try:
+        usuario_id = session.get("usuario_id")
+        try:
+            ok_metricas = servico_pedidos.registrar_metricas_usuario_rotas(
+                usuario_id, rotas_aceitas=0, rotas_recusadas=1
+            )
+            if not ok_metricas:
+                return jsonify({"erro": "Nao foi possivel registrar recusa de rotas."}), 400
+        except Exception as e:
+            print("Falha ao registrar metricas de rotas recusadas:", e)
+            return jsonify({"erro": "Falha ao registrar recusa de rotas."}), 500
+        session.pop("ultima_otimizacao", None)
+        return jsonify({"ok": True})
+    except Exception as e:
+        print("Erro ao descartar otimizacao:", e)
+        return jsonify({"erro": "Falha ao descartar otimizacao."}), 500
 
 # -----------------------------
 # RELATORIOS

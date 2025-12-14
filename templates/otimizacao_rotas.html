@@ -84,6 +84,38 @@ document.addEventListener("DOMContentLoaded", () => {
     const btn = document.getElementById("btnOtimizarRotas");
     const deposito = { lat: {{ deposito_coord[0] }}, lng: {{ deposito_coord[1] }} };
 
+    const salvarRotas = async () => {
+        try {
+            const respSalvar = await fetch("/salvar_rotas_otimizadas", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+            });
+            const corpoSalvar = await respSalvar.json().catch(() => ({}));
+            if (!respSalvar.ok || corpoSalvar?.erro) {
+                throw new Error(corpoSalvar?.erro || "Nao foi possivel salvar as rotas.");
+            }
+            return true;
+        } catch (err) {
+            console.error(err);
+            Swal.fire('Erro', err.message || 'Falha ao salvar rotas.', 'error');
+            return false;
+        }
+    };
+
+    const descartarOtimizacao = async () => {
+        try {
+            const resp = await fetch("/descartar_otimizacao", { method: "POST" });
+            const body = await resp.json().catch(() => ({}));
+            if (!resp.ok || body?.erro) {
+                throw new Error(body?.erro || "Falha ao registrar recusa.");
+            }
+        } catch (err) {
+            console.error("Falha ao descartar otimizacao:", err);
+            Swal.fire('Erro', err.message || 'Falha ao recusar a rota.', 'error');
+            throw err;
+        }
+    };
+
     btn.addEventListener("click", async () => {
         const selecionados = Array.from(document.querySelectorAll("tr[data-pedido-id]"))
             .filter((tr) => tr.querySelector(".selecionar-pedido")?.checked)
@@ -92,7 +124,7 @@ document.addEventListener("DOMContentLoaded", () => {
             .filter((id) => Number.isFinite(id));
 
         if (!selecionados.length) {
-            Swal.fire('Atenção', 'Selecione ao menos um pedido com coordenadas.', 'warning');
+            Swal.fire('Atencao', 'Selecione ao menos um pedido com coordenadas.', 'warning');
             return;
         }
 
@@ -116,28 +148,50 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
+            const clientesPorPedido = resultado.clientes_por_pedido || {};
             const rotas = resultado.rotas_por_veiculo || {};
+            const formatSeq = (entregas) => {
+                const seq = Array.isArray(entregas) ? entregas : [];
+                const legivel = seq.map((n) => {
+                    const base = String(n).split("#")[0];
+                    return clientesPorPedido[base] || base;
+                });
+                return legivel.length ? legivel.join(" -> ") : "Sem entregas";
+            };
             const resumoRotas = Object.entries(rotas)
-                .map(([veiculo, entregas]) => `${veiculo}: ${entregas && entregas.length ? entregas.join(" -> ") : "Sem entregas"}`)
+                .map(([veiculo, entregas]) => `${veiculo}: ${formatSeq(entregas)}`)
                 .join("<br>");
             const distancia = resultado.distancia_total_km
                 ? Number.parseFloat(resultado.distancia_total_km).toFixed(2)
                 : "0.00";
 
             Swal.fire({
-                title: 'Otimização concluída!',
+                title: 'Otimizacao concluida!',
                 html: `
-                    <p style="margin-bottom:6px;"><strong>Distância total estimada:</strong> ${distancia} km</p>
+                    <p style="margin-bottom:6px;"><strong>Distancia total estimada:</strong> ${distancia} km</p>
                     <p style="margin-bottom:6px;"><strong>Rotas criadas:</strong><br><span style="white-space:pre-wrap;text-align:left;display:block;">${resumoRotas}</span></p>
-                    <p style="margin:0;">Clique em "Ver relatório" para visualizar e filtrar por data/cliente/veículo.</p>
+                    <p style="margin:0;">Clique em "Salvar rotas" para registrar as entregas ou recuse para descartar.</p>
                 `,
                 icon: 'success',
                 showCancelButton: true,
-                confirmButtonText: 'Ver relatório',
-                cancelButtonText: 'Fechar',
-            }).then((result) => {
+                confirmButtonText: 'Salvar rotas',
+                cancelButtonText: 'Recusar rota',
+            }).then(async (result) => {
                 if (result.isConfirmed) {
-                    window.location.href = "/rotas_otimizadas";
+                    const salvou = await salvarRotas();
+                    if (salvou) {
+                        Swal.fire('Rotas salvas', 'As rotas foram registradas com sucesso.', 'success')
+                            .then(() => {
+                                window.location.href = "/rotas_otimizadas?origem=sessao";
+                            });
+                    }
+                } else if (result.isDismissed) {
+                    try {
+                        await descartarOtimizacao();
+                        Swal.fire('Rota recusada', 'Nenhuma rota foi registrada.', 'info');
+                    } catch (err) {
+                        // erro já exibido em descartarOtimizacao
+                    }
                 }
             });
         } catch (err) {

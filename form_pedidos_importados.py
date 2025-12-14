@@ -584,6 +584,40 @@ class ServicoPedidosImportados:
             print("Erro ao registrar entregas otimizadas:", e)
             return False, str(e)
 
+    def registrar_metricas_usuario_rotas(
+        self,
+        usuario_id: Optional[int],
+        rotas_aceitas: int = 0,
+        rotas_recusadas: int = 0,
+    ):
+        """
+        Incrementa contadores de rotas aceitas/recusadas em usuario_metricas.
+        """
+        if not usuario_id:
+            return False
+        if rotas_aceitas == 0 and rotas_recusadas == 0:
+            return True
+        try:
+            aceitas = max(0, int(rotas_aceitas))
+            recusadas = max(0, int(rotas_recusadas))
+            with self.banco.obter_cursor() as (conn, cursor):
+                cursor.execute(
+                    """
+                    INSERT INTO usuario_metricas (usuario_id, rotas_aceitas, rotas_recusadas)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (usuario_id) DO UPDATE SET
+                        rotas_aceitas = usuario_metricas.rotas_aceitas + EXCLUDED.rotas_aceitas,
+                        rotas_recusadas = usuario_metricas.rotas_recusadas + EXCLUDED.rotas_recusadas,
+                        atualizado_em = CURRENT_TIMESTAMP;
+                    """,
+                    (int(usuario_id), aceitas, recusadas),
+                )
+                conn.commit()
+            return True
+        except Exception as e:
+            print("Erro ao registrar metricas de rotas do usuario:", e)
+            return False
+
     def otimizar_rotas(
         self,
         pedido_ids: List[int],
