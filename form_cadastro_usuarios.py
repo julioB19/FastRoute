@@ -13,7 +13,10 @@ class ServicoUsuario:
             cargo = dados_usuario["cargo"]
 
             with self.banco.obter_cursor() as (conn, cursor):
-                cursor.execute("SELECT 1 FROM USUARIO WHERE NOME = %s", (nome,))
+                cursor.execute(
+                    "SELECT 1 FROM USUARIO WHERE NOME = %s AND CARGO <> '99'",
+                    (nome,),
+                )
                 if cursor.fetchone() is not None:
                     conn.rollback()
                     return False, f"Ja existe um usuario cadastrado com o nome {nome}."

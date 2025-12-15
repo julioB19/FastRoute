@@ -9,14 +9,20 @@ class ServicoAutenticacao:
         try:
             with self.banco.obter_cursor() as (conn, cursor):
                 cursor.execute(
-                    "SELECT id_usuario, nome, cargo FROM USUARIO WHERE nome = %s AND senha = %s;",
+                    """
+                    SELECT id_usuario, nome, cargo
+                    FROM USUARIO
+                    WHERE nome = %s
+                      AND senha = %s
+                      AND cargo <> '99';
+                    """,
                     (nome, senha),
                 )
                 usuario = cursor.fetchone()
 
             if usuario:
                 return True, {"id": usuario[0], "nome": usuario[1], "cargo": usuario[2]}, None
-            return False, None, "Usuario ou senha invalidos."
+            return False, None, "Usuario ou senha invalidos ou usuario inativo."
 
         except Exception as e:
             print(f"Erro ao autenticar usuario: {e}")

@@ -17,11 +17,11 @@ DEPOSITO_COORD = (-27.367681114267935, -53.40115242306388)
 
 # Config BG
 DB_USER = "postgres"
-#DB_PASSWORD = "fastrout"
-DB_PASSWORD = "1234"
+DB_PASSWORD = "fastrout"
+#DB_PASSWORD = "1234"
 DB_HOST = "localhost"
-#DB_PORT = "3380"
-DB_PORT = "5433"
+DB_PORT = "3380"
+#DB_PORT = "5433"
 DB_NAME = "FastRoute"
 
 config_banco = ConfiguracaoBanco(DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT)
@@ -41,7 +41,8 @@ servico_pedidos = ServicoPedidosImportados(banco_dados)
 # Decorators
 def login_obrigatorio(func):
     def wrapper(*args, **kwargs):
-        if 'usuario_id' not in session:
+        if 'usuario_id' not in session or str(session.get('usuario_cargo')) == '99':
+            session.clear()
             return redirect(url_for('login_page'))
         return func(*args, **kwargs)
     wrapper.__name__ = func.__name__
