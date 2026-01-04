@@ -94,6 +94,7 @@ CREATE TABLE USUARIO_ENTREGA (
 
 CREATE TABLE IF NOT EXISTS usuario_metricas (
     usuario_id      INTEGER PRIMARY KEY REFERENCES usuario(id_usuario),
-    rotas_aceitas   INTEGER NOT NULL DEFAULT 0,
-    atualizado_em   TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+    rotas_aceitas   INTEGER,
+	rotas_recusadas INTEGER,
+    atualizado_em   TIMESTAMP
 );
