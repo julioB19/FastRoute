@@ -3,12 +3,14 @@ import random
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
+from osrm_client import OSRMClient
+
 
 # -----------------------------
-# Distancias via Haversine
+# Distancias: OSRM com fallback Haversine
 # -----------------------------
 def haversine(p1: Tuple[float, float], p2: Tuple[float, float], raio_km: float = 6371.0) -> float:
-    """Retorna a distancia em km entre dois pontos (lat, lon) usando Haversine."""
+    """Retorna a distancia em km entre dois pontos (lat, lon) usando Haversine (fallback)."""
     lat1, lon1 = p1
     lat2, lon2 = p2
 
@@ -24,7 +26,9 @@ def haversine(p1: Tuple[float, float], p2: Tuple[float, float], raio_km: float =
 
 
 def gerar_matriz_distancias(coordenadas: List[Tuple[float, float]]) -> List[List[float]]:
-    """Gera matriz NxN de distancias a partir de uma lista de coordenadas (lat, lon)."""
+    """
+    Fallback: gera matriz NxN de distancias a partir de coordenadas (lat, lon) via Haversine.
+    """
     n = len(coordenadas)
     matriz = [[0.0 for _ in range(n)] for _ in range(n)]
 
@@ -34,6 +38,22 @@ def gerar_matriz_distancias(coordenadas: List[Tuple[float, float]]) -> List[List
             matriz[i][j] = dist
             matriz[j][i] = dist  # garante simetria
     return matriz
+
+
+def gerar_matriz_distancias_osrm(
+    coordenadas: List[Tuple[float, float]],
+    base_url: str = None,
+    profile: str = "driving",
+    timeout: int = 10,
+) -> List[List[float]]:
+    """
+    Usa OSRM Table API para gerar matriz de distancias em km.
+    Espera coordenadas como (lat, lon); OSRM recebe lon,lat.
+    """
+    client = OSRMClient(base_url=base_url, profile=profile, timeout=timeout)
+    tabela = client.table(coordenadas, annotations="distance", fallback_to_route=True)
+    dist_m = tabela.get("distances") or []
+    return [[(d or 0.0) / 1000.0 for d in row] for row in dist_m]
 
 
 # -----------------------------

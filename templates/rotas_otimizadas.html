@@ -214,10 +214,13 @@
                                             {% set clientes_seq = rotas_clientes.get(veic) %}
                                             <p class="mb-2 text-dark"><strong>Sequencia (clientes):</strong> {{ clientes_seq|join(" -> ") if clientes_seq else 'Sem entregas' }}</p>
                                             <div class="d-flex align-items-center gap-2 mb-2">
-                                                <button class="btn btn-success btn-sm btn-whatsapp-rota" type="button" data-veiculo="{{ veic }}">
+                                                <button class="btn btn-success btn-sm btn-whatsapp-rota" type="button" data-veiculo="{{ veic }}" title="Gera link do Google Maps e abre wa.me">
                                                     <i class="bi bi-whatsapp"></i> Enviar rota por WhatsApp
                                                 </button>
-                                                <small class="text-muted">Gera link do Google Maps e abre wa.me</small>
+                                                <div class="btn-group btn-group-sm" role="group">
+                                                    <button class="btn btn-outline-primary btn-export-rota" type="button" data-veiculo="{{ veic }}">Salvar rota</button>
+                                                    <button class="btn btn-outline-secondary btn-print-rota" type="button" data-veiculo="{{ veic }}">Imprimir rota</button>
+                                                </div>
                                             </div>
                                             <div id="map-container-{{ loop.index }}" class="map-container">
                                                 <div id="{{ rota_info.map_id }}" class="mapa-rota"></div>
@@ -429,6 +432,7 @@
 }
 </style>
 
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script>
 document.addEventListener("DOMContentLoaded", () => {
     const normalizarLista = (lista) => {
@@ -510,6 +514,124 @@ document.addEventListener("DOMContentLoaded", () => {
     const modalWhatsappEl = document.getElementById("modalWhatsappRota");
     const modalWhatsapp = modalWhatsappEl ? new bootstrap.Modal(modalWhatsappEl) : null;
     let rotaWhatsappAtual = null;
+    const osrmBaseUrl = (window.OSRM_BASE || "http://localhost:5000").replace(/\/$/, "");
+
+    const montarSequenciaDados = (veic) => {
+        const rota = rotasMapa[veic] || {};
+        const coords = Array.isArray(rota.rota) ? rota.rota : [];
+        const clientesSeq = rotasClientes[veic] || [];
+        if (coords.length < 2) return [];
+        const dados = [];
+        for (let i = 1; i < coords.length - 1; i++) {
+            const [lat, lng] = coords[i];
+            const nome = clientesSeq[i - 1] || `Entrega ${i}`;
+            dados.push({ idx: i, nome, lat, lng });
+        }
+        return dados;
+    };
+
+    const montarSequenciaTexto = (veic) => {
+        const dados = montarSequenciaDados(veic);
+        if (!dados.length) return "Rota sem coordenadas.";
+        const header = ["#", "Cliente", "Latitude", "Longitude"];
+        const linhas = [];
+        linhas.push(`Rota - Veiculo: ${veic}`);
+        linhas.push("======================================");
+        const pad = (txt, size) => String(txt).padEnd(size, " ");
+        linhas.push(`${pad(header[0], 4)}${pad(header[1], 32)}${pad(header[2], 14)}${pad(header[3], 14)}`);
+        linhas.push("-".repeat(70));
+        dados.forEach((d) => {
+            linhas.push(
+                `${pad(d.idx, 4)}${pad(d.nome, 32)}${pad(d.lat.toFixed(6), 14)}${pad(d.lng.toFixed(6), 14)}`
+            );
+        });
+        return linhas.join("\n");
+    };
+
+    const montarSequenciaHtml = (veic) => {
+        const dados = montarSequenciaDados(veic);
+        if (!dados.length) return "<p>Rota sem coordenadas.</p>";
+        const linhas = dados
+            .map(
+                (d) =>
+                    `<tr><td style="padding:6px 8px;border:1px solid #ddd;">${d.idx}</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.nome}</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.lat.toFixed(6)}</td><td style="padding:6px 8px;border:1px solid #ddd;">${d.lng.toFixed(6)}</td></tr>`
+            )
+            .join("");
+        return `
+            <div style="font-family: Arial, sans-serif; color: #222; padding: 16px;">
+                <h3 style="margin-top:0;">Rota - Veiculo: ${veic}</h3>
+                <table style="border-collapse: collapse; width: 100%; font-size: 14px;">
+                    <thead>
+                        <tr>
+                            <th style="padding:6px 8px; border:1px solid #ddd; background:#f4f4f4;">#</th>
+                            <th style="padding:6px 8px; border:1px solid #ddd; background:#f4f4f4;">Cliente</th>
+                            <th style="padding:6px 8px; border:1px solid #ddd; background:#f4f4f4;">Latitude</th>
+                            <th style="padding:6px 8px; border:1px solid #ddd; background:#f4f4f4;">Longitude</th>
+                        </tr>
+                    </thead>
+                    <tbody>${linhas}</tbody>
+                </table>
+            </div>
+        `;
+    };
+
+    const salvarSequencia = (veic) => {
+        // Gera PDF simples via jsPDF com tabela (#, cliente, lat, lon)
+        if (!window.jspdf) {
+            Swal.fire("Erro", "Gerador de PDF indisponivel no momento.", "error");
+            return;
+        }
+        const dados = montarSequenciaDados(veic);
+        if (!dados.length) {
+            Swal.fire("Atencao", "Rota sem coordenadas para exportar.", "warning");
+            return;
+        }
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: "mm", format: "a4" });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const margin = 12;
+        let y = 18;
+
+        doc.setFontSize(14);
+        doc.text(`Rota - Veiculo: ${veic}`, margin, y);
+        y += 8;
+
+        // Cabeçalho
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        doc.text("#", margin, y);
+        doc.text("Cliente", margin + 10, y);
+        doc.text("Latitude", margin + 90, y);
+        doc.text("Longitude", margin + 140, y);
+        y += 6;
+        doc.setFont("helvetica", "normal");
+
+        dados.forEach((d) => {
+            if (y > 280) {
+                doc.addPage();
+                y = 18;
+            }
+            doc.text(String(d.idx), margin, y);
+            doc.text(String(d.nome).substring(0, 40), margin + 10, y);
+            doc.text(d.lat.toFixed(6), margin + 90, y, { align: "left" });
+            doc.text(d.lng.toFixed(6), margin + 140, y, { align: "left" });
+            y += 6;
+        });
+
+        const fileName = `${veic.replace(/\\s+/g, "_")}_rota.pdf`;
+        doc.save(fileName);
+    };
+
+    const imprimirSequencia = (veic) => {
+        const html = montarSequenciaHtml(veic);
+        const win = window.open("", "_blank", "width=700,height=900");
+        if (!win) return;
+        win.document.write(`<!doctype html><html><head><title>Rota ${veic}</title></head><body>${html}</body></html>`);
+        win.document.close();
+        win.focus();
+        win.print();
+    };
 
     // Desenha rota real em estrada usando OSRM (OpenStreetMap)
     const desenharRotaReal = (map, rota) => {
@@ -517,7 +639,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (coords.length < 2) return null;
 
         const coordsOsrm = coords.map((c) => `${c[1]},${c[0]}`).join(";");
-        const url = `https://router.project-osrm.org/route/v1/driving/${coordsOsrm}?overview=full&geometries=geojson&steps=false&continue_straight=true`;
+        const url = `${osrmBaseUrl}/route/v1/driving/${coordsOsrm}?overview=full&geometries=geojson&steps=false&continue_straight=true`;
 
         return fetch(url)
             .then((res) => res.json())
@@ -624,6 +746,20 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById("whatsNumero").value = "";
             document.getElementById("whatsAviso").style.display = "none";
             if (modalWhatsapp) modalWhatsapp.show();
+        });
+    });
+
+    document.querySelectorAll(".btn-export-rota").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const veic = btn.getAttribute("data-veiculo");
+            if (veic) salvarSequencia(veic);
+        });
+    });
+
+    document.querySelectorAll(".btn-print-rota").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const veic = btn.getAttribute("data-veiculo");
+            if (veic) imprimirSequencia(veic);
         });
     });
 

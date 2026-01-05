@@ -8,6 +8,7 @@ from form_otimizacao_rota import (
     encontrar_melhor_rota_genetico,
     gerar_matriz_distancias,
 )
+from osrm_client import OSRMClient, OSRMError
 
 DEPOSITO_COORD_PADRAO = (-27.367681114267935, -53.40115242306388)
 
@@ -743,7 +744,27 @@ class ServicoPedidosImportados:
             detalhe = " | ".join(msg_partes) if msg_partes else "Nenhum pedido elegivel."
             raise ValueError(f"Nenhum pedido otimizavel. {detalhe}")
 
-        matriz = gerar_matriz_distancias(coordenadas)
+        usar_osrm = bool((parametros_algoritmo or {}).get("usar_osrm", True))
+        usar_fallback_haversine = bool((parametros_algoritmo or {}).get("fallback_haversine", True))
+        osrm_url = (parametros_algoritmo or {}).get("osrm_url")
+
+        matriz = []
+        matriz_duracao = []
+        if usar_osrm:
+            osrm_client = OSRMClient(base_url=osrm_url)
+            try:
+                # Distancias e tempos agora vem do OSRM (/table); Haversine fica apenas como fallback.
+                tabela_osrm = osrm_client.table(coordenadas, annotations="distance,duration", fallback_to_route=True)
+                dist_m = tabela_osrm.get("distances") or []
+                matriz = [[(d or 0.0) / 1000.0 for d in row] for row in dist_m]  # metros -> km
+                matriz_duracao = tabela_osrm.get("durations") or []
+            except OSRMError as e:
+                print("OSRM indisponivel:", e)
+                if not usar_fallback_haversine:
+                    raise ValueError("Servico de rotas indisponivel no momento. Tente novamente em instantes.")
+        if not matriz:
+            # Fallback para manter o fluxo caso o OSRM nao responda
+            matriz = gerar_matriz_distancias(coordenadas)
         params = parametros_algoritmo or {}
 
         resultado = encontrar_melhor_rota_genetico(
